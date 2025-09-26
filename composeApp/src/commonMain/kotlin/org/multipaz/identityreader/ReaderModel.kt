@@ -17,7 +17,7 @@ import org.multipaz.cbor.buildCborArray
 import org.multipaz.crypto.Crypto
 import org.multipaz.crypto.EcPrivateKey
 import org.multipaz.mdoc.connectionmethod.MdocConnectionMethod
-import org.multipaz.mdoc.engagement.EngagementParser
+import org.multipaz.mdoc.engagement.DeviceEngagement
 import org.multipaz.mdoc.role.MdocRole
 import org.multipaz.mdoc.sessionencryption.SessionEncryption
 import org.multipaz.mdoc.transport.MdocTransport
@@ -104,7 +104,7 @@ class ReaderModel {
             return _encodedSessionTranscript!!
         }
 
-    private var deviceEngagement: EngagementParser.Engagement? = null
+    private var deviceEngagement: DeviceEngagement? = null
     private var _eReaderKey: EcPrivateKey? = null
     val eReaderKey: EcPrivateKey
         get() {
@@ -149,8 +149,10 @@ class ReaderModel {
         this.existingTransport = existingTransport
         _state.value = State.WAITING_FOR_DEVICE_REQUEST
 
-        deviceEngagement = EngagementParser(encodedDeviceEngagement.toByteArray()).parse()
-        _eReaderKey = Crypto.createEcPrivateKey(deviceEngagement!!.eSenderKey.curve)
+        deviceEngagement = DeviceEngagement.fromDataItem(
+            Cbor.decode(encodedDeviceEngagement.toByteArray())
+        )
+        _eReaderKey = Crypto.createEcPrivateKey(deviceEngagement!!.eDeviceKey.curve)
         val encodedEReaderKey = Cbor.encode(_eReaderKey!!.publicKey.toCoseKey().toDataItem())
         _encodedSessionTranscript = ByteString(
             Cbor.encode(
@@ -260,14 +262,14 @@ class ReaderModel {
         val sessionEncryption = SessionEncryption(
             MdocRole.MDOC_READER,
             eReaderKey,
-            deviceEngagement!!.eSenderKey,
+            deviceEngagement!!.eDeviceKey,
             encodedSessionTranscript.toByteArray(),
         )
 
         println("OK, with transport: $transport")
         val connectionMethod = transport.connectionMethod
         try {
-            transport.open(deviceEngagement!!.eSenderKey)
+            transport.open(deviceEngagement!!.eDeviceKey)
             transport.sendMessage(
                 sessionEncryption.encryptMessage(
                     messagePlaintext = encodedDeviceRequest!!.toByteArray(),

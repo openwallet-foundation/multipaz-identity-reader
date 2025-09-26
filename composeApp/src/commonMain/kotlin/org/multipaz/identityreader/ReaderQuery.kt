@@ -5,11 +5,11 @@ import androidx.compose.material.icons.filled.Numbers
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.io.bytestring.ByteString
-import org.multipaz.crypto.Algorithm
+import org.multipaz.cbor.Cbor
 import org.multipaz.crypto.EcPrivateKey
 import org.multipaz.crypto.X509CertChain
 import org.multipaz.documenttype.knowntypes.DrivingLicense
-import org.multipaz.mdoc.request.DeviceRequestGenerator
+import org.multipaz.mdoc.request.buildDeviceRequestSuspend
 import org.multipaz.securearea.SecureArea
 import org.multipaz.util.Logger
 
@@ -150,38 +150,37 @@ suspend fun generateEncodedDeviceRequest(
     val docType = DrivingLicense.MDL_DOCTYPE
 
     // TODO: for now we're only requesting an mDL, in the future we might request many different doctypes
-
-    val deviceRequestGenerator = DeviceRequestGenerator(encodedSessionTranscript)
-    if (readerKey != null) {
-        deviceRequestGenerator.addDocumentRequest(
-            docType = docType,
-            itemsToRequest = itemsToRequest,
-            requestInfo = null,
-            readerKey = readerKey,
-            signatureAlgorithm = readerKey.curve.defaultSigningAlgorithmFullySpecified,
-            readerKeyCertificateChain = readerKeyCertification,
-        )
-    } else if (readerKeyAlias != null) {
-        deviceRequestGenerator.addDocumentRequest(
-            docType = docType,
-            itemsToRequest = itemsToRequest,
-            requestInfo = null,
-            readerKeySecureArea = readerKeySecureArea!!,
-            readerKeyAlias = readerKeyAlias,
-            readerKeyCertificateChain = readerKeyCertification!!,
-            keyUnlockData = null
-        )
-    } else {
-        deviceRequestGenerator.addDocumentRequest(
-            docType = docType,
-            itemsToRequest = itemsToRequest,
-            requestInfo = null,
-            readerKey = null,
-            signatureAlgorithm = Algorithm.UNSET,
-            readerKeyCertificateChain = null,
-        )
+    val deviceRequest = buildDeviceRequestSuspend(
+        sessionTranscript = Cbor.decode(encodedSessionTranscript),
+    ) {
+        if (readerKey != null) {
+            addDocRequest(
+                docType = docType,
+                nameSpaces = itemsToRequest,
+                docRequestInfo = null,
+                readerKey = readerKey,
+                signatureAlgorithm = readerKey.curve.defaultSigningAlgorithmFullySpecified,
+                readerKeyCertificateChain = readerKeyCertification,
+            )
+        } else if (readerKeyAlias != null) {
+            addDocRequest(
+                docType = docType,
+                nameSpaces = itemsToRequest,
+                docRequestInfo = null,
+                readerKeySecureArea = readerKeySecureArea!!,
+                readerKeyAlias = readerKeyAlias,
+                readerKeyCertificateChain = readerKeyCertification!!,
+                keyUnlockData = null
+            )
+        } else {
+            addDocRequest(
+                docType = docType,
+                nameSpaces = itemsToRequest,
+                docRequestInfo = null
+            )
+        }
     }
-    return deviceRequestGenerator.generate()
+    return Cbor.encode(deviceRequest.toDataItem())
 }
 
 

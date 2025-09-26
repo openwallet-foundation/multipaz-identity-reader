@@ -55,6 +55,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.multipaz.cbor.DataItem
 import org.multipaz.compose.permissions.rememberBluetoothPermissionState
 import org.multipaz.mdoc.connectionmethod.MdocConnectionMethodBle
+import org.multipaz.mdoc.nfc.ScanNfcMdocReaderResult
 import org.multipaz.mdoc.nfc.scanNfcMdocReader
 import org.multipaz.mdoc.transport.MdocTransport
 import org.multipaz.mdoc.transport.MdocTransportFactory
@@ -133,12 +134,7 @@ fun StartScreen(
     promptModel: PromptModel,
     mdocTransportOptionsForNfcEngagement: MdocTransportOptions,
     onScanQrClicked: () -> Unit,
-    onNfcHandover: suspend (
-        transport: MdocTransport,
-        encodedDeviceEngagement: ByteString,
-        handover: DataItem,
-        updateMessage: ((message: String) -> Unit)?
-    ) -> Unit,
+    onNfcHandover: suspend (scanResult: ScanNfcMdocReaderResult) -> Unit,
     onReaderIdentityClicked: () -> Unit,
     onTrustedIssuersClicked: () -> Unit,
     onDeveloperSettingsClicked: () -> Unit,
@@ -307,12 +303,7 @@ private fun StartScreenWithPermissions(
     promptModel: PromptModel,
     mdocTransportOptionsForNfcEngagement: MdocTransportOptions,
     onScanQrClicked: () -> Unit,
-    onNfcHandover: suspend (
-        transport: MdocTransport,
-        encodedDeviceEngagement: ByteString,
-        handover: DataItem,
-        updateMessage: ((message: String) -> Unit)?
-    ) -> Unit,
+    onNfcHandover: suspend (scanResult: ScanNfcMdocReaderResult) -> Unit,
     onOpportunisticSignInToGoogle: () -> Unit,
     onReaderIdentityClicked: () -> Unit
 ) {
@@ -342,7 +333,7 @@ private fun StartScreenWithPermissions(
     LaunchedEffect(Unit) {
         if (nfcTagScanningSupportedWithoutDialog) {
             coroutineScope.launch {
-                scanNfcMdocReader(
+                val scanResult = scanNfcMdocReader(
                     message = null,
                     options = mdocTransportOptionsForNfcEngagement,
                     transportFactory = MdocTransportFactory.Default,
@@ -355,9 +346,11 @@ private fun StartScreenWithPermissions(
                             peripheralServerModeUuid = null,
                             centralClientModeUuid = UUID.randomUUID(),
                         )
-                    ),
-                    onHandover = onNfcHandover
+                    )
                 )
+                if (scanResult != null) {
+                    onNfcHandover(scanResult)
+                }
             }
         }
     }
@@ -441,7 +434,7 @@ private fun StartScreenWithPermissions(
             OutlinedButton(
                 onClick = {
                     coroutineScope.launch {
-                        scanNfcMdocReader(
+                        val scanResult = scanNfcMdocReader(
                             message = "Hold to Wallet",
                             options = MdocTransportOptions(bleUseL2CAP = true),
                             transportFactory = MdocTransportFactory.Default,
@@ -455,8 +448,10 @@ private fun StartScreenWithPermissions(
                                     centralClientModeUuid = UUID.randomUUID(),
                                 )
                             ),
-                            onHandover = onNfcHandover
                         )
+                        if (scanResult != null) {
+                            onNfcHandover(scanResult)
+                        }
                     }
                 }
             ) {

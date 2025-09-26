@@ -85,6 +85,30 @@ information
                         )
                     }
                 }
+                entries.add {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.Start),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(32.dp),
+                            imageVector = Icons.Outlined.Bluetooth,
+                            contentDescription = null
+                        )
+                        EntryItem(
+                            modifier = Modifier.weight(1.0f),
+                            key = "Use L2CAP in engagement",
+                            valueText = "If enabled, L2CAP will be enabled for Bluetooth Low Energy connections " +
+                                    "but only during device engagement"
+                        )
+                        Checkbox(
+                            checked = settingsModel.bleL2capInEngagementEnabled.collectAsState().value,
+                            onCheckedChange = { value ->
+                                settingsModel.bleL2capInEngagementEnabled.value = value
+                            },
+                        )
+                    }
+                }
 
                 entries.add {
                     Row(

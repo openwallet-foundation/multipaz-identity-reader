@@ -74,10 +74,16 @@ class App(
     private lateinit var readerBackendClient: ReaderBackendClient
 
     private fun getMdocTransportOptionsForNfcEngagement() =
-        MdocTransportOptions(bleUseL2CAP = settingsModel.bleL2capEnabled.value)
+        MdocTransportOptions(
+            bleUseL2CAP = settingsModel.bleL2capEnabled.value,
+            bleUseL2CAPInEngagement = settingsModel.bleL2capInEngagementEnabled.value
+        )
 
     private fun getMdocTransportOptionsForQrEngagement() =
-        MdocTransportOptions(bleUseL2CAP = settingsModel.bleL2capEnabled.value)
+        MdocTransportOptions(
+            bleUseL2CAP = settingsModel.bleL2capEnabled.value,
+            bleUseL2CAPInEngagement = settingsModel.bleL2capInEngagementEnabled.value
+        )
 
     private val initLock = Mutex()
     private var initialized = false
@@ -269,12 +275,12 @@ class App(
                         onScanQrClicked = {
                             navController.navigate(route = ScanQrDestination.route)
                         },
-                        onNfcHandover = { transport, encodedDeviceEngagement, handover, updateMessage ->
+                        onNfcHandover = { scanResult ->
                             readerModel.reset()
                             readerModel.setConnectionEndpoint(
-                                encodedDeviceEngagement = encodedDeviceEngagement,
-                                handover = handover,
-                                existingTransport = transport
+                                encodedDeviceEngagement = scanResult.encodedDeviceEngagement,
+                                handover = scanResult.handover,
+                                existingTransport = scanResult.transport
                             )
                             val readerQuery = ReaderQuery.valueOf(settingsModel.selectedQueryName.value)
                             readerModel.setDeviceRequest(
