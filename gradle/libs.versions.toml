@@ -43,6 +43,7 @@ multipaz = { group = "org.multipaz", name = "multipaz", version.ref = "multipaz"
 multipaz-doctypes = { group = "org.multipaz", name = "multipaz-doctypes", version.ref = "multipaz" }
 multipaz-models = { group = "org.multipaz", name = "multipaz-models", version.ref = "multipaz" }
 multipaz-compose = { group = "org.multipaz", name = "multipaz-compose", version.ref = "multipaz" }
+multipaz-vision = { group = "org.multipaz", name = "multipaz-vision", version.ref = "multipaz" }
 multipaz-cbor-rpc = { group = "org.multipaz", name = "multipaz-cbor-rpc", version.ref = "multipaz" }
 ktor-client-android = { module = "io.ktor:ktor-client-android", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
