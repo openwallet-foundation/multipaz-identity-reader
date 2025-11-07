@@ -52,19 +52,18 @@ import multipazidentityreader.composeapp.generated.resources.qr_icon
 import multipazidentityreader.composeapp.generated.resources.start_screen_title
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
-import org.multipaz.cbor.DataItem
 import org.multipaz.compose.permissions.rememberBluetoothPermissionState
 import org.multipaz.mdoc.connectionmethod.MdocConnectionMethodBle
-import org.multipaz.mdoc.nfc.ScanNfcMdocReaderResult
-import org.multipaz.mdoc.nfc.scanNfcMdocReader
-import org.multipaz.mdoc.transport.MdocTransport
+import org.multipaz.mdoc.nfc.ScanMdocReaderResult
+import org.multipaz.mdoc.nfc.scanMdocReader
 import org.multipaz.mdoc.transport.MdocTransportFactory
 import org.multipaz.mdoc.transport.MdocTransportOptions
-import org.multipaz.nfc.nfcTagScanningSupported
-import org.multipaz.nfc.nfcTagScanningSupportedWithoutDialog
+import org.multipaz.nfc.NfcScanOptions
+import org.multipaz.nfc.NfcTagReader
 import org.multipaz.prompt.PromptModel
 import org.multipaz.util.Logger
 import org.multipaz.util.UUID
+import org.multipaz.util.fromHex
 import org.multipaz.util.toBase64Url
 
 private const val TAG = "StartScreen"
@@ -134,7 +133,7 @@ fun StartScreen(
     promptModel: PromptModel,
     mdocTransportOptionsForNfcEngagement: MdocTransportOptions,
     onScanQrClicked: () -> Unit,
-    onNfcHandover: suspend (scanResult: ScanNfcMdocReaderResult) -> Unit,
+    onNfcHandover: suspend (scanResult: ScanMdocReaderResult) -> Unit,
     onReaderIdentityClicked: () -> Unit,
     onTrustedIssuersClicked: () -> Unit,
     onDeveloperSettingsClicked: () -> Unit,
@@ -303,7 +302,7 @@ private fun StartScreenWithPermissions(
     promptModel: PromptModel,
     mdocTransportOptionsForNfcEngagement: MdocTransportOptions,
     onScanQrClicked: () -> Unit,
-    onNfcHandover: suspend (scanResult: ScanNfcMdocReaderResult) -> Unit,
+    onNfcHandover: suspend (scanResult: ScanMdocReaderResult) -> Unit,
     onOpportunisticSignInToGoogle: () -> Unit,
     onReaderIdentityClicked: () -> Unit
 ) {
@@ -326,14 +325,18 @@ private fun StartScreenWithPermissions(
         iterations = Compottie.IterateForever
     )
 
+    val reader = NfcTagReader.getReaders().firstOrNull()
+    val nfcScanOptions = NfcScanOptions(
+        pollingFrameData = ByteString("6a0281030000".fromHex())
+    )
     // On Platforms that support NFC scanning without a dialog, start scanning as soon
     // as we enter this screen. We'll get canceled when switched away because `coroutineScope`
     // will get canceled.
     //
     LaunchedEffect(Unit) {
-        if (nfcTagScanningSupportedWithoutDialog) {
+        if (reader != null && !reader.dialogAlwaysShown) {
             coroutineScope.launch {
-                val scanResult = scanNfcMdocReader(
+                val scanResult = reader.scanMdocReader(
                     message = null,
                     options = mdocTransportOptionsForNfcEngagement,
                     transportFactory = MdocTransportFactory.Default,
@@ -346,7 +349,8 @@ private fun StartScreenWithPermissions(
                             peripheralServerModeUuid = null,
                             centralClientModeUuid = UUID.randomUUID(),
                         )
-                    )
+                    ),
+                    nfcScanOptions = nfcScanOptions
                 )
                 if (scanResult != null) {
                     onNfcHandover(scanResult)
@@ -388,7 +392,7 @@ private fun StartScreenWithPermissions(
 
         Spacer(modifier = Modifier.weight(0.2f))
 
-        if (!nfcTagScanningSupported) {
+        if (reader == null) {
             // This is for phones that don't support NFC scanning
             Text(
                 text = "Scan QR code from Wallet",
@@ -404,7 +408,7 @@ private fun StartScreenWithPermissions(
                 contentDescription = null,
                 modifier = Modifier.size(200.dp)
             )
-            if (nfcTagScanningSupportedWithoutDialog) {
+            if (!reader.dialogAlwaysShown) {
                 // This is for phones that support NFC scanning w/o dialog (Android)
                 Text(
                     text = "Hold to Wallet",
@@ -430,11 +434,11 @@ private fun StartScreenWithPermissions(
 
         // Only show the "Scan NFC" button on platforms which require the system NFC Scan dialog (iOS)
         // and if the device actually supports NFC scanning functionality.
-        if (nfcTagScanningSupported && !nfcTagScanningSupportedWithoutDialog) {
+        if (reader != null && reader.dialogAlwaysShown) {
             OutlinedButton(
                 onClick = {
                     coroutineScope.launch {
-                        val scanResult = scanNfcMdocReader(
+                        val scanResult = reader.scanMdocReader(
                             message = "Hold to Wallet",
                             options = MdocTransportOptions(bleUseL2CAP = true),
                             transportFactory = MdocTransportFactory.Default,
@@ -448,6 +452,7 @@ private fun StartScreenWithPermissions(
                                     centralClientModeUuid = UUID.randomUUID(),
                                 )
                             ),
+                            nfcScanOptions = nfcScanOptions
                         )
                         if (scanResult != null) {
                             onNfcHandover(scanResult)

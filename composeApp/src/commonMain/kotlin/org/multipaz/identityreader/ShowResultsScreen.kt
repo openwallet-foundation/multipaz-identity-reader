@@ -49,6 +49,7 @@ import multipazidentityreader.composeapp.generated.resources.Res
 import org.multipaz.cbor.Cbor
 import org.multipaz.claim.MdocClaim
 import org.multipaz.compose.decodeImage
+import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.documenttype.knowntypes.DrivingLicense
 import org.multipaz.mdoc.response.DeviceResponseParser
@@ -159,7 +160,7 @@ private suspend fun parseResponse(
         encodedDeviceResponse = readerModel.result!!.encodedDeviceResponse!!.toByteArray(),
         encodedSessionTranscript = readerModel.result!!.encodedSessionTranscript.toByteArray()
     )
-    parser.setEphemeralReaderKey(readerModel.result!!.eReaderKey)
+    parser.setEphemeralReaderKey(AsymmetricKey.AnonymousExplicit(privateKey = readerModel.result!!.eReaderKey))
     val deviceResponse = parser.parse()
 
     val readerDocuments = mutableListOf<MdocDocument>()

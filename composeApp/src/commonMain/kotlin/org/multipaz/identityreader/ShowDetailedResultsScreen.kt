@@ -30,6 +30,7 @@ import org.multipaz.cbor.Cbor
 import org.multipaz.cbor.DiagnosticOption
 import org.multipaz.compose.datetime.formattedDateTime
 import org.multipaz.compose.decodeImage
+import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.crypto.X509CertChain
 import org.multipaz.documenttype.DocumentAttributeType
 import org.multipaz.documenttype.DocumentTypeRepository
@@ -241,7 +242,7 @@ private suspend fun parseResponse(
             encodedDeviceResponse = result.encodedDeviceResponse!!.toByteArray(),
             encodedSessionTranscript = result.encodedSessionTranscript.toByteArray()
         )
-        parser.setEphemeralReaderKey(result.eReaderKey)
+        parser.setEphemeralReaderKey(AsymmetricKey.AnonymousExplicit(privateKey = result.eReaderKey))
         val deviceResponse = parser.parse()
 
         deviceResponse.documents.forEachIndexed { documentIndex, document ->

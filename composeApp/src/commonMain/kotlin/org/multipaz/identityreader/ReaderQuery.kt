@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.io.bytestring.ByteString
 import org.multipaz.cbor.Cbor
+import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.crypto.EcPrivateKey
 import org.multipaz.crypto.X509CertChain
 import org.multipaz.documenttype.knowntypes.DrivingLicense
@@ -158,19 +159,28 @@ suspend fun generateEncodedDeviceRequest(
                 docType = docType,
                 nameSpaces = itemsToRequest,
                 docRequestInfo = null,
-                readerKey = readerKey,
-                signatureAlgorithm = readerKey.curve.defaultSigningAlgorithmFullySpecified,
-                readerKeyCertificateChain = readerKeyCertification,
+                readerKey = if (readerKeyCertification != null) {
+                    AsymmetricKey.X509CertifiedExplicit(
+                        certChain = readerKeyCertification,
+                        privateKey = readerKey,
+                    )
+                } else {
+                    AsymmetricKey.AnonymousExplicit(
+                        privateKey = readerKey,
+                    )
+                }
             )
         } else if (readerKeyAlias != null) {
             addDocRequest(
                 docType = docType,
                 nameSpaces = itemsToRequest,
                 docRequestInfo = null,
-                readerKeySecureArea = readerKeySecureArea!!,
-                readerKeyAlias = readerKeyAlias,
-                readerKeyCertificateChain = readerKeyCertification!!,
-                keyUnlockData = null
+                readerKey = AsymmetricKey.X509CertifiedSecureAreaBased(
+                    certChain = readerKeyCertification!!,
+                    alias = readerKeyAlias,
+                    secureArea = readerKeySecureArea!!,
+                    keyInfo = readerKeySecureArea.getKeyInfo(readerKeyAlias)
+                )
             )
         } else {
             addDocRequest(

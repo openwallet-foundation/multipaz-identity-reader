@@ -13,7 +13,7 @@ kotlinx-io = "0.8.0"
 kotlinx-datetime = "0.7.1"
 kotlinx-serialization = "1.9.0"
 ksp = "2.2.0-2.0.2"
-multipaz = "0.94.0"
+multipaz = "0.95.0"
 ktor = "2.3.13"
 logback = "1.5.18"
 hsqldb = "2.7.4"
@@ -41,7 +41,6 @@ kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime",
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 multipaz = { group = "org.multipaz", name = "multipaz", version.ref = "multipaz" }
 multipaz-doctypes = { group = "org.multipaz", name = "multipaz-doctypes", version.ref = "multipaz" }
-multipaz-models = { group = "org.multipaz", name = "multipaz-models", version.ref = "multipaz" }
 multipaz-compose = { group = "org.multipaz", name = "multipaz-compose", version.ref = "multipaz" }
 multipaz-cbor-rpc = { group = "org.multipaz", name = "multipaz-cbor-rpc", version.ref = "multipaz" }
 ktor-client-android = { module = "io.ktor:ktor-client-android", version.ref = "ktor" }

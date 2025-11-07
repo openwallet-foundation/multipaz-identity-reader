@@ -34,6 +34,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.multipaz.asn1.ASN1Integer
+import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.crypto.Crypto
 import org.multipaz.crypto.EcCurve
 import org.multipaz.crypto.EcPrivateKey
@@ -51,7 +52,6 @@ import org.multipaz.rpc.backend.getTable
 import org.multipaz.rpc.handler.InvalidRequestException
 import org.multipaz.server.ServerConfiguration
 import org.multipaz.server.ServerEnvironment
-import org.multipaz.server.ServerIdentity
 import org.multipaz.server.getServerIdentity
 import org.multipaz.trustmanagement.TrustEntry
 import org.multipaz.trustmanagement.TrustEntryX509Cert
@@ -145,7 +145,7 @@ private suspend fun handleGetReaderRootCert(
         val identity = getReaderRootIdentity(forTrustedDevices = forTrustedDevices)
         call.respondText(
             contentType = ContentType.Text.Plain,
-            text = identity.certificateChain.certificates.joinToString { it.toPem() }
+            text = identity.certChain.certificates.joinToString { it.toPem() }
         )
     }
 }
@@ -243,9 +243,9 @@ private fun createServer(
         val (issuerTrustListVersion, issuerTrustList) = getTrustedIssuers()
         ReaderBackend(
             readerRootKeyForUntrustedDevices = readerRootForUntrustedDevices.privateKey,
-            readerRootCertChainForUntrustedDevices = readerRootForUntrustedDevices.certificateChain,
+            readerRootCertChainForUntrustedDevices = readerRootForUntrustedDevices.certChain,
             readerRootKey = readerRoot.privateKey,
-            readerRootCertChain = readerRoot.certificateChain,
+            readerRootCertChain = readerRoot.certChain,
             readerCertDuration = DateTimePeriod(days = settings.readerCertValidityDays),
             iosReleaseBuild = settings.iosReleaseBuild,
             iosAppIdentifier = settings.iosAppIdentifier,
@@ -282,7 +282,9 @@ private suspend fun getTrustedIssuers(): Pair<Long, List<TrustEntry>> {
                         privacyPolicyUrl = entry["privacy_policy_url"]?.jsonPrimitive?.content,
                         testOnly = entry["test_only"]?.jsonPrimitive?.booleanOrNull ?: false
                     ),
-                    certificate = X509Cert(entry["certificate"]!!.jsonPrimitive.content.fromBase64Url())
+                    certificate = X509Cert(
+                        encoded = ByteString(entry["certificate"]!!.jsonPrimitive.content.fromBase64Url())
+                    )
                 ))
             }
             else -> {
@@ -293,7 +295,7 @@ private suspend fun getTrustedIssuers(): Pair<Long, List<TrustEntry>> {
     return Pair(version, entries)
 }
 
-private suspend fun getReaderRootIdentity(forTrustedDevices: Boolean): ServerIdentity {
+private suspend fun getReaderRootIdentity(forTrustedDevices: Boolean): AsymmetricKey.X509CertifiedExplicit {
     val keyName = if (forTrustedDevices) {
         "reader_root_identity"
     } else {
@@ -315,13 +317,16 @@ private suspend fun getReaderRootIdentity(forTrustedDevices: Boolean): ServerIde
         val readerRootKey = Crypto.createEcPrivateKey(EcCurve.P384)
         val readerRootCertificate =
             MdocUtil.generateReaderRootCertificate(
-                readerRootKey = readerRootKey,
+                readerRootKey = AsymmetricKey.AnonymousExplicit(readerRootKey),
                 subject = subjectAndIssuer,
                 serial = serial,
                 validFrom = validFrom,
                 validUntil = validUntil,
                 crlUrl = "https://github.com/openwallet-foundation-labs/identity-credential/crl"
             )
-        ServerIdentity(readerRootKey, X509CertChain(listOf(readerRootCertificate)))
-    }
+        AsymmetricKey.X509CertifiedExplicit(
+            certChain = X509CertChain(listOf(readerRootCertificate)),
+            privateKey = readerRootKey,
+        )
+    } as AsymmetricKey.X509CertifiedExplicit
 }

@@ -21,11 +21,13 @@ import org.multipaz.cbor.annotation.CborSerializable
 import org.multipaz.certext.GoogleAccount
 import org.multipaz.certext.MultipazExtension
 import org.multipaz.certext.toCbor
+import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.crypto.EcPrivateKey
 import org.multipaz.crypto.EcPublicKey
 import org.multipaz.crypto.X500Name
 import org.multipaz.crypto.X509CertChain
 import org.multipaz.crypto.X509Extension
+import org.multipaz.device.AndroidKeystoreSecurityLevel
 import org.multipaz.device.AssertionNonce
 import org.multipaz.device.DeviceAssertion
 import org.multipaz.device.DeviceAttestation
@@ -178,10 +180,12 @@ open class ReaderBackend(
                 DeviceAttestationValidationData(
                     attestationChallenge = ByteString(nonce),
                     iosReleaseBuild = iosReleaseBuild,
-                    iosAppIdentifier = iosAppIdentifier,
+                    iosAppIdentifiers = iosAppIdentifier?.let { setOf(it) } ?: emptySet(),
                     androidGmsAttestation = androidGmsAttestation,
                     androidVerifiedBootGreen = androidVerifiedBootGreen,
-                    androidAppSignatureCertificateDigests = androidAppSignatureCertificateDigests
+                    androidRequiredKeyMintSecurityLevel = AndroidKeystoreSecurityLevel.TRUSTED_ENVIRONMENT,
+                    androidAppSignatureCertificateDigests = androidAppSignatureCertificateDigests.toSet(),
+                    androidAppPackageNames = setOf()
                 )
             )
             // For now we only trust Android devices...
@@ -311,8 +315,10 @@ open class ReaderBackend(
                 emptyList()
             }
             val readerCert = MdocUtil.generateReaderCertificate(
-                readerRootCert = chosenReaderRootCertChain.certificates[0],
-                readerRootKey = chosenReaderRootKey,
+                readerRootKey = AsymmetricKey.X509CertifiedExplicit(
+                    certChain = chosenReaderRootCertChain,
+                    privateKey = chosenReaderRootKey,
+                ),
                 readerKey = key,
                 subject = X500Name.fromName("CN=Multipaz Identity Reader Single-Use Key"),
                 serial = ASN1Integer.fromRandom(numBits = 128, random = random),

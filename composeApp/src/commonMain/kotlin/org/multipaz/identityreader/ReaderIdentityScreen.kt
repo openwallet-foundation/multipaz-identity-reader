@@ -47,6 +47,7 @@ import multipazidentityreader.composeapp.generated.resources.reader_identity_tit
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.multipaz.crypto.X509CertChain
+import org.multipaz.prompt.PassphraseEvaluation
 import org.multipaz.prompt.PromptModel
 import org.multipaz.prompt.requestPassphrase
 import org.multipaz.securearea.PassphraseConstraints
@@ -76,7 +77,7 @@ fun ReaderIdentityScreen(
             if (files.isNotEmpty()) {
                 val pkcs12Contents = files[0]
                 coroutineScope.launch {
-                    val passphrase = requestPassphrase(
+                    val passphrase = promptModel.requestPassphrase(
                         title = "Import reader certificate",
                         subtitle = "The PKCS#12 file is protected by a passphrase which have " +
                                 "should have been shared with you. Enter the passphrase to continue",
@@ -84,15 +85,16 @@ fun ReaderIdentityScreen(
                         passphraseEvaluator = { passphrase ->
                             try {
                                 parsePkcs12(pkcs12Contents, passphrase)
-                                null
+                                PassphraseEvaluation.OK
                             } catch (e: WrongPassphraseException) {
                                 Logger.w(TAG, "Wrong passphrase", e)
                                 "Wrong passphrase. Try again"
+                                PassphraseEvaluation.TryAgain
                             } catch (_: Throwable) {
                                 // If parsing fails for reasons other than the wrong passphrase
                                 // supplied, just pretend the passphrase worked and we'll catch
                                 // the error below and show it to the user
-                                null
+                                PassphraseEvaluation.OK
                             }
                         }
                     )

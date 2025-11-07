@@ -27,7 +27,7 @@ actual fun parsePkcs12(pkcs12: ByteString, passphrase: String): Pair<EcPrivateKe
         if (keyStore.isKeyEntry(alias)) {
             val javaCertChain = keyStore.getCertificateChain(alias)
             val certChain = X509CertChain(certificates = javaCertChain.map {
-                X509Cert(encodedCertificate = it.encoded)
+                X509Cert(encoded = ByteString(it.encoded))
             })
             val javaPrivateKey = keyStore.getKey(alias, passphrase.toCharArray()) as PrivateKey
             val privateKey = javaPrivateKey.toEcPrivateKey(
