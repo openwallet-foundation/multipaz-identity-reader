@@ -8,11 +8,16 @@ import platform.posix.exit
 class IOSPlatform: Platform {
     override val name: String = UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion
 
+    // No API to do this on iOS
+    override val nfcPollingFramesInsertionSupported = false
+
     override fun exitApp() {
         exit(0)
     }
 }
 
-actual fun getPlatform(): Platform = IOSPlatform()
+private val platform by lazy { IOSPlatform() }
+
+actual fun getPlatform(): Platform = platform
 
 actual fun platformHttpClientEngineFactory(): HttpClientEngineFactory<*> = Darwin

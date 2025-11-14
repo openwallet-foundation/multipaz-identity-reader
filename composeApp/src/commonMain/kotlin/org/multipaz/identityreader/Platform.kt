@@ -5,6 +5,9 @@ import io.ktor.client.engine.HttpClientEngineFactory
 interface Platform {
     val name: String
 
+    // Workaround for now until b/460804407 is resolved and used in Multipaz
+    val nfcPollingFramesInsertionSupported: Boolean
+
     fun exitApp()
 }
 

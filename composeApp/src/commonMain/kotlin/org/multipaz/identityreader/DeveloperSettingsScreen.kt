@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bluetooth
 import androidx.compose.material.icons.outlined.DoorBack
+import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -105,6 +106,33 @@ information
                             checked = settingsModel.bleL2capInEngagementEnabled.collectAsState().value,
                             onCheckedChange = { value ->
                                 settingsModel.bleL2capInEngagementEnabled.value = value
+                            },
+                        )
+                    }
+                }
+
+                entries.add {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.Start),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(32.dp),
+                            imageVector = Icons.Outlined.Nfc,
+                            contentDescription = null
+                        )
+                        EntryItem(
+                            modifier = Modifier.weight(1.0f),
+                            key = "Insert extra frames in NFC polling loop",
+                            valueText = "If enabled, extra frames will be inserted " +
+                                    "to enable the wallet to detect this is an Identity Reader"
+                        )
+                        Checkbox(
+                            enabled = getPlatform().nfcPollingFramesInsertionSupported,
+                            checked = settingsModel.insertNfcPollingFrames.collectAsState().value &&
+                                    getPlatform().nfcPollingFramesInsertionSupported,
+                            onCheckedChange = { value ->
+                                settingsModel.insertNfcPollingFrames.value = value
                             },
                         )
                     }

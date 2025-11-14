@@ -149,6 +149,7 @@ class SettingsModel private constructor(
         // L2CAP is off by default for now because Apple Wallet's L2CAP implementation is buggy.
         bind(bleL2capEnabled, "bleL2capEnabled", false)
         bind(bleL2capInEngagementEnabled, "bleL2capInEngagementEnabled", true)
+        bind(insertNfcPollingFrames, "insertNfcPollingFrames", true)
     }
 
     val logTransactions = MutableStateFlow<Boolean>(false)
@@ -165,4 +166,5 @@ class SettingsModel private constructor(
     val devMode = MutableStateFlow<Boolean>(false)
     val bleL2capEnabled = MutableStateFlow<Boolean>(false)
     val bleL2capInEngagementEnabled = MutableStateFlow<Boolean>(false)
+    val insertNfcPollingFrames = MutableStateFlow<Boolean>(true)
 }

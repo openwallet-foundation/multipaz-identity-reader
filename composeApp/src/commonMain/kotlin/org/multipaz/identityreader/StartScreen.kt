@@ -326,9 +326,13 @@ private fun StartScreenWithPermissions(
     )
 
     val reader = NfcTagReader.getReaders().firstOrNull()
-    val nfcScanOptions = NfcScanOptions(
-        pollingFrameData = ByteString("6a0281030000".fromHex())
-    )
+    val nfcScanOptions = if (getPlatform().nfcPollingFramesInsertionSupported && settingsModel.insertNfcPollingFrames.value) {
+        NfcScanOptions(
+            pollingFrameData = ByteString("6a0281030000".fromHex())
+        )
+    } else {
+        NfcScanOptions()
+    }
     // On Platforms that support NFC scanning without a dialog, start scanning as soon
     // as we enter this screen. We'll get canceled when switched away because `coroutineScope`
     // will get canceled.
