@@ -7,11 +7,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.io.bytestring.ByteString
 import org.multipaz.cbor.Cbor
 import org.multipaz.crypto.AsymmetricKey
-import org.multipaz.crypto.EcPrivateKey
-import org.multipaz.crypto.X509CertChain
 import org.multipaz.documenttype.knowntypes.DrivingLicense
+import org.multipaz.documenttype.knowntypes.PhotoIDLowercase
+import org.multipaz.mdoc.engagement.Capability
+import org.multipaz.mdoc.engagement.DeviceEngagement
+import org.multipaz.mdoc.request.DeviceRequestInfo
+import org.multipaz.mdoc.request.DocumentSet
+import org.multipaz.mdoc.request.UseCase
 import org.multipaz.mdoc.request.buildDeviceRequestSuspend
-import org.multipaz.securearea.SecureArea
 import org.multipaz.util.Logger
 
 private const val TAG = "ReaderQuery"
@@ -49,59 +52,70 @@ enum class ReaderQuery(
                 settingsModel.readerAuthMethodGoogleIdentity.value!!.id
             }
         }
+        val sessionTranscript = Cbor.decode(encodedSessionTranscript.toByteArray())
+        val deviceEngagement = DeviceEngagement.fromDataItem(sessionTranscript.asArray[0].asTaggedEncodedCbor)
         val deviceRequest = when (settingsModel.readerAuthMethod.value) {
             ReaderAuthMethod.NO_READER_AUTH -> {
                 generateEncodedDeviceRequest(
                     query = this,
+                    deviceEngagement = deviceEngagement,
                     intentToRetain = settingsModel.logTransactions.value,
                     encodedSessionTranscript = encodedSessionTranscript.toByteArray(),
                     readerKey = null,
-                    readerKeyAlias = null,
-                    readerKeySecureArea = null,
-                    readerKeyCertification = null
                 )
             }
             ReaderAuthMethod.IDENTITY_FROM_GOOGLE_ACCOUNT,
             ReaderAuthMethod.STANDARD_READER_AUTH,
             ReaderAuthMethod.STANDARD_READER_AUTH_WITH_GOOGLE_ACCOUNT_DETAILS -> {
-                val (keyInfo, keyCertification) = try {
-                    readerBackendClient.getKey(readerIdentityId)
+                val readerKey = try {
+                    val (keyInfo, keyCertification) = readerBackendClient.getKey(readerIdentityId)
+                    readerBackendClient.markKeyAsUsed(keyInfo)
+                    AsymmetricKey.X509CertifiedSecureAreaBased(
+                        certChain = keyCertification,
+                        alias = keyInfo.alias,
+                        secureArea = keyInfo.let { readerBackendClient.secureArea },
+                        keyInfo = readerBackendClient.secureArea.getKeyInfo(keyInfo.alias)
+                    )
                 } catch (e: ReaderIdentityNotAvailableException) {
                     try {
                         Logger.w(TAG, "The reader identity we're configured for is no longer working", e)
                         Logger.i(TAG, "Resetting configuration to standard reader auth")
                         settingsModel.readerAuthMethod.value = ReaderAuthMethod.STANDARD_READER_AUTH
                         settingsModel.readerAuthMethodGoogleIdentity.value = null
-                        readerBackendClient.getKey(null)
+                        val (keyInfo, keyCertification) = readerBackendClient.getKey(null)
+                        readerBackendClient.markKeyAsUsed(keyInfo)
+                        AsymmetricKey.X509CertifiedSecureAreaBased(
+                            certChain = keyCertification,
+                            alias = keyInfo.alias,
+                            secureArea = keyInfo.let { readerBackendClient.secureArea },
+                            keyInfo = readerBackendClient.secureArea.getKeyInfo(keyInfo.alias)
+                        )
                     } catch (e: Throwable) {
                         Logger.e(TAG, "Error getting certified reader key, proceeding without reader authentication", e)
-                        Pair(null, null)
+                        null
                     }
                 } catch (e: Throwable) {
                     Logger.e(TAG, "Error getting certified reader key, proceeding without reader authentication", e)
-                    Pair(null, null)
+                    null
                 }
                 generateEncodedDeviceRequest(
                     query = this,
+                    deviceEngagement = deviceEngagement,
                     intentToRetain = settingsModel.logTransactions.value,
                     encodedSessionTranscript = encodedSessionTranscript.toByteArray(),
-                    readerKey = null,
-                    readerKeyAlias = keyInfo?.alias,
-                    readerKeySecureArea = keyInfo?.let { readerBackendClient.secureArea },
-                    readerKeyCertification = keyCertification
-                ).also {
-                    keyInfo?.let { readerBackendClient.markKeyAsUsed(it) }
-                }
+                    readerKey = readerKey,
+                )
             }
             ReaderAuthMethod.CUSTOM_KEY -> {
                 generateEncodedDeviceRequest(
                     query = this,
+                    deviceEngagement = deviceEngagement,
                     intentToRetain = settingsModel.logTransactions.value,
                     encodedSessionTranscript = encodedSessionTranscript.toByteArray(),
-                    readerKey = settingsModel.customReaderAuthKey.value!!,
-                    readerKeyAlias = null,
-                    readerKeySecureArea = null,
-                    readerKeyCertification = settingsModel.customReaderAuthCertChain.value!!
+                    readerKey = AsymmetricKey.X509CertifiedExplicit(
+                        certChain = settingsModel.customReaderAuthCertChain.value!!,
+                        privateKey = settingsModel.customReaderAuthKey.value!!,
+                    )
                 )
             }
         }
@@ -111,16 +125,13 @@ enum class ReaderQuery(
 
 suspend fun generateEncodedDeviceRequest(
     query: ReaderQuery,
+    deviceEngagement: DeviceEngagement,
     intentToRetain: Boolean,
     encodedSessionTranscript: ByteArray,
-    readerKey: EcPrivateKey?,
-    readerKeyAlias: String?,
-    readerKeySecureArea: SecureArea?,
-    readerKeyCertification: X509CertChain?
+    readerKey: AsymmetricKey.X509Compatible?,
 ): ByteArray {
-
-    val itemsToRequest = mutableMapOf<String, MutableMap<String, Boolean>>()
-    val mdlNs = itemsToRequest.getOrPut(DrivingLicense.MDL_NAMESPACE) { mutableMapOf() }
+    val mdlItemsToRequest = mutableMapOf<String, MutableMap<String, Boolean>>()
+    val mdlNs = mdlItemsToRequest.getOrPut(DrivingLicense.MDL_NAMESPACE) { mutableMapOf() }
     when (query) {
         ReaderQuery.AGE_OVER_18 -> {
             mdlNs.put("age_over_18", intentToRetain)
@@ -148,48 +159,89 @@ suspend fun generateEncodedDeviceRequest(
             mdlNs.put("expiry_date", intentToRetain)
         }
     }
-    val docType = DrivingLicense.MDL_DOCTYPE
+    val mdlDocType = DrivingLicense.MDL_DOCTYPE
 
-    // TODO: for now we're only requesting an mDL, in the future we might request many different doctypes
+    val photoIdItemsToRequest = mutableMapOf<String, MutableMap<String, Boolean>>()
+    val iso23220Ns = photoIdItemsToRequest.getOrPut(PhotoIDLowercase.ISO_23220_2_NAMESPACE) { mutableMapOf() }
+    when (query) {
+        ReaderQuery.AGE_OVER_18 -> {
+            iso23220Ns.put("age_over_18", intentToRetain)
+            iso23220Ns.put("portrait", intentToRetain)
+        }
+        ReaderQuery.AGE_OVER_21 -> {
+            iso23220Ns.put("age_over_21", intentToRetain)
+            iso23220Ns.put("portrait", intentToRetain)
+        }
+        ReaderQuery.IDENTIFICATION -> {
+            iso23220Ns.put("given_name", intentToRetain)
+            iso23220Ns.put("family_name", intentToRetain)
+            iso23220Ns.put("birth_date", intentToRetain)
+            iso23220Ns.put("birthplace", intentToRetain)
+            iso23220Ns.put("sex", intentToRetain)
+            iso23220Ns.put("portrait", intentToRetain)
+            iso23220Ns.put("resident_address", intentToRetain)
+            iso23220Ns.put("resident_city", intentToRetain)
+            iso23220Ns.put("resident_state", intentToRetain)
+            iso23220Ns.put("resident_postal_code", intentToRetain)
+            iso23220Ns.put("resident_country", intentToRetain)
+            iso23220Ns.put("issuing_authority_unicode", intentToRetain)
+            iso23220Ns.put("document_number", intentToRetain)
+            iso23220Ns.put("issue_date", intentToRetain)
+            iso23220Ns.put("expiry_date", intentToRetain)
+        }
+    }
+    val photoIdDocType = PhotoIDLowercase.PHOTO_ID_DOCTYPE_LOWERCASE
+
+    val deviceRequestInfo = if (deviceEngagement.capabilities.get(Capability.EXTENDED_REQUEST_SUPPORT)?.asBoolean == true) {
+        DeviceRequestInfo(
+            useCases = listOf(
+                UseCase(
+                    mandatory = true,
+                    documentSets = listOf(
+                        DocumentSet(listOf(0)),
+                        DocumentSet(listOf(1)),
+                    ),
+                    purposeHints = mapOf()
+                )
+            )
+        )
+    } else { null }
+
     val deviceRequest = buildDeviceRequestSuspend(
         sessionTranscript = Cbor.decode(encodedSessionTranscript),
+        deviceRequestInfo = deviceRequestInfo
     ) {
         if (readerKey != null) {
             addDocRequest(
-                docType = docType,
-                nameSpaces = itemsToRequest,
+                docType = mdlDocType,
+                nameSpaces = mdlItemsToRequest,
                 docRequestInfo = null,
-                readerKey = if (readerKeyCertification != null) {
-                    AsymmetricKey.X509CertifiedExplicit(
-                        certChain = readerKeyCertification,
-                        privateKey = readerKey,
-                    )
-                } else {
-                    AsymmetricKey.AnonymousExplicit(
-                        privateKey = readerKey,
-                    )
-                }
+                readerKey = readerKey
             )
-        } else if (readerKeyAlias != null) {
-            addDocRequest(
-                docType = docType,
-                nameSpaces = itemsToRequest,
-                docRequestInfo = null,
-                readerKey = AsymmetricKey.X509CertifiedSecureAreaBased(
-                    certChain = readerKeyCertification!!,
-                    alias = readerKeyAlias,
-                    secureArea = readerKeySecureArea!!,
-                    keyInfo = readerKeySecureArea.getKeyInfo(readerKeyAlias)
+            if (deviceEngagement.capabilities.get(Capability.EXTENDED_REQUEST_SUPPORT)?.asBoolean == true) {
+                addDocRequest(
+                    docType = photoIdDocType,
+                    nameSpaces = photoIdItemsToRequest,
+                    docRequestInfo = null,
+                    readerKey = readerKey
                 )
-            )
+            }
         } else {
             addDocRequest(
-                docType = docType,
-                nameSpaces = itemsToRequest,
+                docType = mdlDocType,
+                nameSpaces = mdlItemsToRequest,
                 docRequestInfo = null
             )
+            if (deviceEngagement.capabilities.get(Capability.EXTENDED_REQUEST_SUPPORT)?.asBoolean == true) {
+                addDocRequest(
+                    docType = photoIdDocType,
+                    nameSpaces = photoIdItemsToRequest,
+                    docRequestInfo = null,
+                )
+            }
         }
     }
+    Logger.iCbor(TAG, "deviceRequest", deviceRequest.toDataItem())
     return Cbor.encode(deviceRequest.toDataItem())
 }
 

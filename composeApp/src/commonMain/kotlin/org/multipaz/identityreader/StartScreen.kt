@@ -44,6 +44,7 @@ import io.github.alexzhirkevich.compottie.rememberLottieComposition
 import io.github.alexzhirkevich.compottie.rememberLottiePainter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.io.bytestring.ByteString
 import multipazidentityreader.composeapp.generated.resources.Res
@@ -65,6 +66,7 @@ import org.multipaz.util.Logger
 import org.multipaz.util.UUID
 import org.multipaz.util.fromHex
 import org.multipaz.util.toBase64Url
+import kotlin.time.Duration.Companion.seconds
 
 private const val TAG = "StartScreen"
 
@@ -340,26 +342,35 @@ private fun StartScreenWithPermissions(
     LaunchedEffect(Unit) {
         if (reader != null && !reader.dialogAlwaysShown) {
             coroutineScope.launch {
-                val scanResult = reader.scanMdocReader(
-                    message = null,
-                    options = mdocTransportOptionsForNfcEngagement,
-                    transportFactory = MdocTransportFactory.Default,
-                    // TODO: maybe do UI
-                    selectConnectionMethod = { connectionMethods -> connectionMethods.first() },
-                    negotiatedHandoverConnectionMethods = listOf(
-                        MdocConnectionMethodBle(
-                            supportsPeripheralServerMode = false,
-                            supportsCentralClientMode = true,
-                            peripheralServerModeUuid = null,
-                            centralClientModeUuid = UUID.randomUUID(),
+                while (true) {
+                    try {
+                        Logger.i(TAG, "Calling reader.scanMdocReader()")
+                        val scanResult = reader.scanMdocReader(
+                            message = null,
+                            options = mdocTransportOptionsForNfcEngagement,
+                            transportFactory = MdocTransportFactory.Default,
+                            // TODO: maybe do UI
+                            selectConnectionMethod = { connectionMethods -> connectionMethods.first() },
+                            negotiatedHandoverConnectionMethods = listOf(
+                                MdocConnectionMethodBle(
+                                    supportsPeripheralServerMode = false,
+                                    supportsCentralClientMode = true,
+                                    peripheralServerModeUuid = null,
+                                    centralClientModeUuid = UUID.randomUUID(),
+                                )
+                            ),
+                            nfcScanOptions = nfcScanOptions
                         )
-                    ),
-                    nfcScanOptions = nfcScanOptions
-                )
-                if (scanResult != null) {
-                    onNfcHandover(scanResult)
+                        if (scanResult != null) {
+                            onNfcHandover(scanResult)
+                        }
+                        break
+                    } catch (e: Throwable) {
+                        Logger.e(TAG, "Caught exception while scanning. Retrying", e)
+                    }
                 }
             }
+            Logger.i(TAG, "Done1")
         }
     }
 

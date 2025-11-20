@@ -29,6 +29,7 @@ import org.multipaz.cbor.Simple
 import org.multipaz.compose.prompt.PromptDialogs
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.documenttype.knowntypes.DrivingLicense
+import org.multipaz.documenttype.knowntypes.PhotoIDLowercase
 import org.multipaz.mdoc.transport.MdocTransportOptions
 import org.multipaz.mdoc.transport.NfcTransportMdocReader
 import org.multipaz.trustmanagement.CompositeTrustManager
@@ -113,6 +114,7 @@ class App(
 
             documentTypeRepository = DocumentTypeRepository()
             documentTypeRepository.addDocumentType(DrivingLicense.getDocumentType())
+            documentTypeRepository.addDocumentType(PhotoIDLowercase.getDocumentType())
             // Note: builtInTrustManager will be populated at app startup, see updateBuiltInIssuers()
             //   and its call-sites
             builtInTrustManager = TrustManagerLocal(

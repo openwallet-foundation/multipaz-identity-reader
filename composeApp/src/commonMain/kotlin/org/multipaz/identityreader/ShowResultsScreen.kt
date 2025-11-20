@@ -52,6 +52,7 @@ import org.multipaz.compose.decodeImage
 import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.documenttype.knowntypes.DrivingLicense
+import org.multipaz.documenttype.knowntypes.PhotoIDLowercase
 import org.multipaz.mdoc.response.DeviceResponseParser
 import org.multipaz.trustmanagement.TrustManager
 import org.multipaz.trustmanagement.TrustPoint
@@ -392,8 +393,18 @@ private fun ShowAgeOver(
     onShowDetailedResults: (() -> Unit)?
 ) {
     val portraitBitmap = remember { getPortraitBitmap(document) }
-    val mdlNameSpace = document.namespaces.find { it.name == DrivingLicense.MDL_NAMESPACE }
-    val ageOver = mdlNameSpace?.dataElements?.get("age_over_${age}")?.value?.asBoolean
+    val ageOver = when (document.docType) {
+        DrivingLicense.MDL_DOCTYPE -> {
+            val mdlNamespace = document.namespaces.find { it.name == DrivingLicense.MDL_NAMESPACE }
+            mdlNamespace?.dataElements?.get("age_over_${age}")?.value?.asBoolean
+        }
+        PhotoIDLowercase.PHOTO_ID_DOCTYPE_LOWERCASE -> {
+            val iso23220Namespace = document.namespaces.find { it.name == PhotoIDLowercase.ISO_23220_2_NAMESPACE }
+            iso23220Namespace?.dataElements?.get("age_over_${age}")?.value?.asBoolean
+        }
+        else -> null
+    }
+
     val (message, animationFile) = if (ageOver != null && ageOver == true) {
         Pair("This person is $age or older", "files/success_animation.json")
     } else if (ageOver != null) {
@@ -418,7 +429,6 @@ private fun ShowAgeOver(
             .let {
                 println("onShowDetailedResults: $onShowDetailedResults")
                 if (onShowDetailedResults != null) {
-                    println("foo")
                     it.combinedClickable(
                         onClick = {},
                         onDoubleClick = { onShowDetailedResults() }
@@ -454,8 +464,6 @@ private fun ShowIdentification(
     onShowDetailedResults: (() -> Unit)?
 ) {
     val portraitBitmap = remember { getPortraitBitmap(document) }
-    val mdlNameSpace = document.namespaces.find { it.name == DrivingLicense.MDL_NAMESPACE }
-
     val composition by rememberLottieComposition {
         LottieCompositionSpec.JsonString(
             Res.readBytes("files/success_animation.json").decodeToString()
@@ -519,6 +527,9 @@ private fun ShowIdentification(
                 if (namespace.name == DrivingLicense.MDL_NAMESPACE && dataElementName == "portrait") {
                     continue
                 }
+                if (namespace.name == PhotoIDLowercase.ISO_23220_2_NAMESPACE && dataElementName == "portrait") {
+                    continue
+                }
 
                 KeyValuePairText(key, value)
             }
@@ -548,18 +559,33 @@ private fun KeyValuePairText(
 }
 
 private fun getPortraitBitmap(document: MdocDocument): ImageBitmap? {
-    if (document.docType != DrivingLicense.MDL_DOCTYPE) {
-        return null
+    when (document.docType) {
+        DrivingLicense.MDL_DOCTYPE -> {
+            val mdlNamespace = document.namespaces.find { it.name == DrivingLicense.MDL_NAMESPACE }
+            if (mdlNamespace == null) {
+                return null
+            }
+            val portraitClaim = mdlNamespace.dataElements["portrait"]
+            if (portraitClaim == null) {
+                return null
+            }
+            return decodeImage(portraitClaim.value.asBstr)
+        }
+        PhotoIDLowercase.PHOTO_ID_DOCTYPE_LOWERCASE -> {
+            val iso23220Namespace = document.namespaces.find { it.name == PhotoIDLowercase.ISO_23220_2_NAMESPACE }
+            if (iso23220Namespace == null) {
+                return null
+            }
+            val portraitClaim = iso23220Namespace.dataElements["portrait"]
+            if (portraitClaim == null) {
+                return null
+            }
+            return decodeImage(portraitClaim.value.asBstr)
+        }
+        else -> {
+            return null
+        }
     }
-    val mdlNamespace = document.namespaces.find { it.name == DrivingLicense.MDL_NAMESPACE }
-    if (mdlNamespace == null) {
-        return null
-    }
-    val portraitClaim = mdlNamespace.dataElements["portrait"]
-    if (portraitClaim == null) {
-        return null
-    }
-    return decodeImage(portraitClaim.value.asBstr)
 }
 
 @Composable
