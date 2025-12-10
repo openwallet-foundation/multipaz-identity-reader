@@ -9,7 +9,7 @@ import org.multipaz.util.Logger
 
 private const val TAG = "Platform"
 
-class AndroidPlatform : Platform {
+class AndroidPlatformUtils : PlatformUtils {
     override val name: String = "Android ${Build.VERSION.SDK_INT}"
 
     override val nfcPollingFramesInsertionSupported by lazy {
@@ -29,13 +29,11 @@ class AndroidPlatform : Platform {
         }
     }
 
+    override val httpClientEngineFactory: HttpClientEngineFactory<*> = Android
+
     override fun exitApp() {
         System.exit(0)
     }
 }
 
-private val platform by lazy { AndroidPlatform() }
-
-actual fun getPlatform(): Platform = platform
-
-actual fun platformHttpClientEngineFactory(): HttpClientEngineFactory<*> = Android
+actual fun getPlatformUtils(): PlatformUtils = AndroidPlatformUtils()

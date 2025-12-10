@@ -5,19 +5,17 @@ import io.ktor.client.engine.darwin.Darwin
 import platform.UIKit.UIDevice
 import platform.posix.exit
 
-class IOSPlatform: Platform {
+class IOSPlatformUtils: PlatformUtils {
     override val name: String = UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion
 
     // No API to do this on iOS
     override val nfcPollingFramesInsertionSupported = false
+
+    override val httpClientEngineFactory: HttpClientEngineFactory<*> = Darwin
 
     override fun exitApp() {
         exit(0)
     }
 }
 
-private val platform by lazy { IOSPlatform() }
-
-actual fun getPlatform(): Platform = platform
-
-actual fun platformHttpClientEngineFactory(): HttpClientEngineFactory<*> = Darwin
+actual fun getPlatformUtils(): PlatformUtils = IOSPlatformUtils()

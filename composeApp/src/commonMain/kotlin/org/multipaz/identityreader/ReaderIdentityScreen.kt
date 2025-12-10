@@ -46,8 +46,10 @@ import multipazidentityreader.composeapp.generated.resources.app_icon
 import multipazidentityreader.composeapp.generated.resources.reader_identity_title
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import org.multipaz.compose.pickers.rememberFilePicker
 import org.multipaz.crypto.X509CertChain
 import org.multipaz.prompt.PassphraseEvaluation
+import org.multipaz.prompt.PromptDismissedException
 import org.multipaz.prompt.PromptModel
 import org.multipaz.prompt.requestPassphrase
 import org.multipaz.securearea.PassphraseConstraints
@@ -77,48 +79,48 @@ fun ReaderIdentityScreen(
             if (files.isNotEmpty()) {
                 val pkcs12Contents = files[0]
                 coroutineScope.launch {
-                    val passphrase = promptModel.requestPassphrase(
-                        title = "Import reader certificate",
-                        subtitle = "The PKCS#12 file is protected by a passphrase which have " +
-                                "should have been shared with you. Enter the passphrase to continue",
-                        passphraseConstraints = PassphraseConstraints.NONE,
-                        passphraseEvaluator = { passphrase ->
-                            try {
-                                parsePkcs12(pkcs12Contents, passphrase)
-                                PassphraseEvaluation.OK
-                            } catch (e: WrongPassphraseException) {
-                                Logger.w(TAG, "Wrong passphrase", e)
-                                "Wrong passphrase. Try again"
-                                PassphraseEvaluation.TryAgain
-                            } catch (_: Throwable) {
-                                // If parsing fails for reasons other than the wrong passphrase
-                                // supplied, just pretend the passphrase worked and we'll catch
-                                // the error below and show it to the user
-                                PassphraseEvaluation.OK
+                    try {
+                        val passphrase = promptModel.requestPassphrase(
+                            title = "Import reader certificate",
+                            subtitle = "The PKCS#12 file is protected by a passphrase which have " +
+                                    "should have been shared with you. Enter the passphrase to continue",
+                            passphraseConstraints = PassphraseConstraints.NONE,
+                            passphraseEvaluator = { passphrase ->
+                                try {
+                                    parsePkcs12(pkcs12Contents, passphrase)
+                                    PassphraseEvaluation.OK
+                                } catch (e: WrongPassphraseException) {
+                                    Logger.w(TAG, "Wrong passphrase", e)
+                                    "Wrong passphrase. Try again"
+                                    PassphraseEvaluation.TryAgain
+                                } catch (_: Throwable) {
+                                    // If parsing fails for reasons other than the wrong passphrase
+                                    // supplied, just pretend the passphrase worked and we'll catch
+                                    // the error below and show it to the user
+                                    PassphraseEvaluation.OK
+                                }
                             }
+                        )
+                        val (privateKey, certChain) = parsePkcs12(pkcs12Contents, passphrase)
+                        require(privateKey.publicKey == certChain.certificates[0].ecPublicKey) {
+                            "First certificate is not for the given key"
                         }
-                    )
-                    if (passphrase != null) {
-                        try {
-                            val (privateKey, certChain) = parsePkcs12(pkcs12Contents, passphrase)
-                            require(privateKey.publicKey == certChain.certificates[0].ecPublicKey) {
-                                "First certificate is not for the given key"
-                            }
-                            require(certChain.validate()) {
-                                "Certificate chain did not validate"
-                            }
-                            println("first : ${certChain.certificates[0].toPem()}")
-                            println("second : ${certChain.certificates[1].toPem()}")
-                            // TODO: add a couple of additional checks for example that the leaf certificate
-                            //   has the correct keyUsage flags, etc.
-                            //
-                            settingsModel.customReaderAuthKey.value = privateKey
-                            settingsModel.customReaderAuthCertChain.value = certChain
-                            settingsModel.readerAuthMethod.value = ReaderAuthMethod.CUSTOM_KEY
-                        } catch (e: Throwable) {
-                            e.printStackTrace()
-                            showImportErrorDialog.value = "Importing reader key failed: $e"
+                        require(certChain.validate()) {
+                            "Certificate chain did not validate"
                         }
+                        println("first : ${certChain.certificates[0].toPem()}")
+                        println("second : ${certChain.certificates[1].toPem()}")
+                        // TODO: add a couple of additional checks for example that the leaf certificate
+                        //   has the correct keyUsage flags, etc.
+                        //
+                        settingsModel.customReaderAuthKey.value = privateKey
+                        settingsModel.customReaderAuthCertChain.value = certChain
+                        settingsModel.readerAuthMethod.value = ReaderAuthMethod.CUSTOM_KEY
+                    } catch (_: PromptDismissedException) {
+                        /* do nothing */
+                    } catch (e: Throwable) {
+                        e.printStackTrace()
+                        showImportErrorDialog.value = "Importing reader key failed: $e"
                     }
                 }
             }

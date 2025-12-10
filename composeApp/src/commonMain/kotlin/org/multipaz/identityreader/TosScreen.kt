@@ -100,7 +100,7 @@ fun TosScreen(settingsModel: SettingsModel) {
                     OutlinedButton(
                         modifier = Modifier.weight(0.5f),
                         onClick = {
-                            getPlatform().exitApp()
+                            getPlatformUtils().exitApp()
                         }
                     ) {
                         Text(text = "Decline")

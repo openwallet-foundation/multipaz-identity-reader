@@ -44,7 +44,7 @@ fun AppUpdateCard() {
 
     LaunchedEffect(true) {
         try {
-            val httpClient = HttpClient(platformHttpClientEngineFactory().create())
+            val httpClient = HttpClient(getPlatformUtils().httpClientEngineFactory.create())
             val response = httpClient.get(updateUrl)
             if (response.status == HttpStatusCode.OK) {
                 latestVersionString.value = response.readBytes().decodeToString().trim()

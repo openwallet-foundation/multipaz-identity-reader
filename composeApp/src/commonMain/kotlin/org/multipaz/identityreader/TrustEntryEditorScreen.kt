@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 import org.multipaz.compose.cropRotateScaleImage
 import org.multipaz.compose.decodeImage
 import org.multipaz.compose.encodeImageToPng
+import org.multipaz.compose.pickers.rememberImagePicker
 import org.multipaz.trustmanagement.TrustEntry
 import org.multipaz.trustmanagement.TrustEntryVical
 import org.multipaz.trustmanagement.TrustEntryX509Cert

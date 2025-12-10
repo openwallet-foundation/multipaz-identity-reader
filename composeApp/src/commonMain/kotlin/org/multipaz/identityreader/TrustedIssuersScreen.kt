@@ -56,6 +56,8 @@ import kotlinx.coroutines.launch
 import multipazidentityreader.composeapp.generated.resources.Res
 import multipazidentityreader.composeapp.generated.resources.trusted_issuers_screen_title
 import org.jetbrains.compose.resources.stringResource
+import org.multipaz.compose.pickers.FilePicker
+import org.multipaz.compose.pickers.rememberFilePicker
 import org.multipaz.crypto.X509Cert
 import org.multipaz.mdoc.vical.SignedVical
 import org.multipaz.trustmanagement.TrustEntry

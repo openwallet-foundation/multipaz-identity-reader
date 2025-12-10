@@ -128,9 +128,9 @@ information
                                     "to enable the wallet to detect this is an Identity Reader"
                         )
                         Checkbox(
-                            enabled = getPlatform().nfcPollingFramesInsertionSupported,
+                            enabled = getPlatformUtils().nfcPollingFramesInsertionSupported,
                             checked = settingsModel.insertNfcPollingFrames.collectAsState().value &&
-                                    getPlatform().nfcPollingFramesInsertionSupported,
+                                    getPlatformUtils().nfcPollingFramesInsertionSupported,
                             onCheckedChange = { value ->
                                 settingsModel.insertNfcPollingFrames.value = value
                             },

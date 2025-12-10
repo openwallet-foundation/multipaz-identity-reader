@@ -1,14 +1,10 @@
 package org.multipaz.identityreader
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Numbers
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.io.bytestring.ByteString
 import org.multipaz.cbor.Cbor
 import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.documenttype.knowntypes.DrivingLicense
-import org.multipaz.documenttype.knowntypes.PhotoIDLowercase
+import org.multipaz.documenttype.knowntypes.PhotoID
 import org.multipaz.mdoc.engagement.Capability
 import org.multipaz.mdoc.engagement.DeviceEngagement
 import org.multipaz.mdoc.request.DeviceRequestInfo
@@ -20,19 +16,15 @@ import org.multipaz.util.Logger
 private const val TAG = "ReaderQuery"
 
 enum class ReaderQuery(
-    val icon: ImageVector,
     val displayName: String,
 ) {
     AGE_OVER_18(
-        icon = Icons.Filled.Numbers,
         displayName = "Age Over 18",
     ),
     AGE_OVER_21(
-        icon = Icons.Filled.Numbers,
         displayName = "Age Over 21",
     ),
     IDENTIFICATION(
-        icon = Icons.Filled.Person,
         displayName = "Identification",
     ),
 
@@ -67,14 +59,16 @@ enum class ReaderQuery(
             ReaderAuthMethod.IDENTITY_FROM_GOOGLE_ACCOUNT,
             ReaderAuthMethod.STANDARD_READER_AUTH,
             ReaderAuthMethod.STANDARD_READER_AUTH_WITH_GOOGLE_ACCOUNT_DETAILS -> {
-                val readerKey = try {
+                val (readerKey, keyInfo) = try {
                     val (keyInfo, keyCertification) = readerBackendClient.getKey(readerIdentityId)
-                    readerBackendClient.markKeyAsUsed(keyInfo)
-                    AsymmetricKey.X509CertifiedSecureAreaBased(
-                        certChain = keyCertification,
-                        alias = keyInfo.alias,
-                        secureArea = keyInfo.let { readerBackendClient.secureArea },
-                        keyInfo = readerBackendClient.secureArea.getKeyInfo(keyInfo.alias)
+                    Pair(
+                        AsymmetricKey.X509CertifiedSecureAreaBased(
+                            certChain = keyCertification,
+                            alias = keyInfo.alias,
+                            secureArea = keyInfo.let { readerBackendClient.secureArea },
+                            keyInfo = readerBackendClient.secureArea.getKeyInfo(keyInfo.alias)
+                        ),
+                        keyInfo
                     )
                 } catch (e: ReaderIdentityNotAvailableException) {
                     try {
@@ -83,20 +77,22 @@ enum class ReaderQuery(
                         settingsModel.readerAuthMethod.value = ReaderAuthMethod.STANDARD_READER_AUTH
                         settingsModel.readerAuthMethodGoogleIdentity.value = null
                         val (keyInfo, keyCertification) = readerBackendClient.getKey(null)
-                        readerBackendClient.markKeyAsUsed(keyInfo)
-                        AsymmetricKey.X509CertifiedSecureAreaBased(
-                            certChain = keyCertification,
-                            alias = keyInfo.alias,
-                            secureArea = keyInfo.let { readerBackendClient.secureArea },
-                            keyInfo = readerBackendClient.secureArea.getKeyInfo(keyInfo.alias)
+                        Pair(
+                            AsymmetricKey.X509CertifiedSecureAreaBased(
+                                certChain = keyCertification,
+                                alias = keyInfo.alias,
+                                secureArea = keyInfo.let { readerBackendClient.secureArea },
+                                keyInfo = readerBackendClient.secureArea.getKeyInfo(keyInfo.alias)
+                            ),
+                            keyInfo
                         )
                     } catch (e: Throwable) {
                         Logger.e(TAG, "Error getting certified reader key, proceeding without reader authentication", e)
-                        null
+                        Pair(null, null)
                     }
                 } catch (e: Throwable) {
                     Logger.e(TAG, "Error getting certified reader key, proceeding without reader authentication", e)
-                    null
+                    Pair(null, null)
                 }
                 generateEncodedDeviceRequest(
                     query = this,
@@ -104,7 +100,9 @@ enum class ReaderQuery(
                     intentToRetain = settingsModel.logTransactions.value,
                     encodedSessionTranscript = encodedSessionTranscript.toByteArray(),
                     readerKey = readerKey,
-                )
+                ).also {
+                    keyInfo?.let { readerBackendClient.markKeyAsUsed(it) }
+                }
             }
             ReaderAuthMethod.CUSTOM_KEY -> {
                 generateEncodedDeviceRequest(
@@ -162,7 +160,7 @@ suspend fun generateEncodedDeviceRequest(
     val mdlDocType = DrivingLicense.MDL_DOCTYPE
 
     val photoIdItemsToRequest = mutableMapOf<String, MutableMap<String, Boolean>>()
-    val iso23220Ns = photoIdItemsToRequest.getOrPut(PhotoIDLowercase.ISO_23220_2_NAMESPACE) { mutableMapOf() }
+    val iso23220Ns = photoIdItemsToRequest.getOrPut(PhotoID.ISO_23220_2_NAMESPACE) { mutableMapOf() }
     when (query) {
         ReaderQuery.AGE_OVER_18 -> {
             iso23220Ns.put("age_over_18", intentToRetain)
@@ -190,7 +188,7 @@ suspend fun generateEncodedDeviceRequest(
             iso23220Ns.put("expiry_date", intentToRetain)
         }
     }
-    val photoIdDocType = PhotoIDLowercase.PHOTO_ID_DOCTYPE_LOWERCASE
+    val photoIdDocType = PhotoID.PHOTO_ID_DOCTYPE
 
     val deviceRequestInfo = if (deviceEngagement.capabilities.get(Capability.EXTENDED_REQUEST_SUPPORT)?.asBoolean == true) {
         DeviceRequestInfo(

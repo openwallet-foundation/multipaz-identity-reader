@@ -67,6 +67,8 @@ import org.multipaz.util.UUID
 import org.multipaz.util.fromHex
 import org.multipaz.util.toBase64Url
 import kotlin.time.Duration.Companion.seconds
+import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.isActive
 
 private const val TAG = "StartScreen"
 
@@ -81,7 +83,7 @@ private suspend fun signIn(
         explicitSignIn = explicitSignIn,
         serverClientId = BuildConfig.IDENTITY_READER_BACKEND_CLIENT_ID,
         nonce = nonce.toByteArray().toBase64Url(),
-        httpClientEngineFactory = platformHttpClientEngineFactory(),
+        httpClientEngineFactory = getPlatformUtils().httpClientEngineFactory,
     )
     readerBackendClient.signIn(nonce, googleIdTokenString)
     settingsModel.signedIn.value = signInData
@@ -328,7 +330,7 @@ private fun StartScreenWithPermissions(
     )
 
     val reader = NfcTagReader.getReaders().firstOrNull()
-    val nfcScanOptions = if (getPlatform().nfcPollingFramesInsertionSupported && settingsModel.insertNfcPollingFrames.value) {
+    val nfcScanOptions = if (getPlatformUtils().nfcPollingFramesInsertionSupported && settingsModel.insertNfcPollingFrames.collectAsState().value) {
         NfcScanOptions(
             pollingFrameData = ByteString("6a0281030000".fromHex())
         )
@@ -366,7 +368,12 @@ private fun StartScreenWithPermissions(
                         }
                         break
                     } catch (e: Throwable) {
-                        Logger.e(TAG, "Caught exception while scanning. Retrying", e)
+                        if (!coroutineScope.isActive) {
+                            Logger.e(TAG, "Caught exception while scanning and scope isn't active", e)
+                            break
+                        } else {
+                            Logger.e(TAG, "Caught exception while scanning. Retrying", e)
+                        }
                     }
                 }
             }

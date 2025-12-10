@@ -16,22 +16,21 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.io.bytestring.ByteString
 import org.multipaz.cbor.Cbor
 import org.multipaz.cbor.Simple
 import org.multipaz.compose.prompt.PromptDialogs
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.documenttype.knowntypes.DrivingLicense
-import org.multipaz.documenttype.knowntypes.PhotoIDLowercase
+import org.multipaz.documenttype.knowntypes.PhotoID
 import org.multipaz.mdoc.transport.MdocTransportOptions
-import org.multipaz.mdoc.transport.NfcTransportMdocReader
 import org.multipaz.trustmanagement.CompositeTrustManager
 import org.multipaz.trustmanagement.TrustEntryVical
 import org.multipaz.trustmanagement.TrustEntryX509Cert
@@ -43,7 +42,6 @@ import org.multipaz.util.fromBase64Url
 import org.multipaz.util.toBase64Url
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.seconds
 
 data class UrlLaunchData(
     val url: String,
@@ -65,7 +63,7 @@ class App(
     }
 
     private val promptModel = Platform.promptModel
-    private var startDestination: String? = null
+    private var startDestination: Destination? = null
     private val readerModel = ReaderModel()
     private lateinit var documentTypeRepository: DocumentTypeRepository
     private lateinit var builtInTrustManager: TrustManagerLocal
@@ -107,14 +105,14 @@ class App(
                     handover = Simple.NULL,
                     existingTransport = null
                 )
-                SelectRequestDestination.route
+                SelectRequestDestination
             } else {
                 null
             }
 
             documentTypeRepository = DocumentTypeRepository()
             documentTypeRepository.addDocumentType(DrivingLicense.getDocumentType())
-            documentTypeRepository.addDocumentType(PhotoIDLowercase.getDocumentType())
+            documentTypeRepository.addDocumentType(PhotoID.getDocumentType())
             // Note: builtInTrustManager will be populated at app startup, see updateBuiltInIssuers()
             //   and its call-sites
             builtInTrustManager = TrustManagerLocal(
@@ -134,7 +132,7 @@ class App(
                 readerBackendUrl = BuildConfig.IDENTITY_READER_BACKEND_URL,
                 //readerBackendUrl = "http://127.0.0.1:8020",
                 storage = Platform.nonBackedUpStorage,
-                httpClientEngineFactory = platformHttpClientEngineFactory(),
+                httpClientEngineFactory = getPlatformUtils().httpClientEngineFactory,
                 secureArea = Platform.getSecureArea(),
                 numKeys = 10,
             )
@@ -265,17 +263,17 @@ class App(
 
             NavHost(
                 navController = navController,
-                startDestination = startDestination ?: StartDestination.route,
+                startDestination = startDestination ?: StartDestination,
                 modifier = Modifier.fillMaxSize()
             ) {
-                composable(route = StartDestination.route) {
+                composable<StartDestination> { backStackEntry ->
                     StartScreen(
                         settingsModel = settingsModel,
                         readerBackendClient = readerBackendClient,
                         promptModel = promptModel,
                         mdocTransportOptionsForNfcEngagement = getMdocTransportOptionsForNfcEngagement(),
                         onScanQrClicked = {
-                            navController.navigate(route = ScanQrDestination.route)
+                            navController.navigate(route = ScanQrDestination)
                         },
                         onNfcHandover = { scanResult ->
                             readerModel.reset()
@@ -292,15 +290,15 @@ class App(
                                     readerBackendClient = readerBackendClient
                                 )
                             )
-                            navController.navigate(route = TransferDestination.route)
+                            navController.navigate(route = TransferDestination)
                         },
-                        onReaderIdentityClicked = { navController.navigate(route = ReaderIdentityDestination.route) },
-                        onTrustedIssuersClicked = { navController.navigate(route = TrustedIssuersDestination.route) },
-                        onDeveloperSettingsClicked = { navController.navigate(route = DeveloperSettingsDestination.route) },
-                        onAboutClicked = { navController.navigate(route = AboutDestination.route) },
+                        onReaderIdentityClicked = { navController.navigate(route = ReaderIdentityDestination) },
+                        onTrustedIssuersClicked = { navController.navigate(route = TrustedIssuersDestination) },
+                        onDeveloperSettingsClicked = { navController.navigate(route = DeveloperSettingsDestination) },
+                        onAboutClicked = { navController.navigate(route = AboutDestination) },
                     )
                 }
-                composable(route = ScanQrDestination.route) {
+                composable<ScanQrDestination> { backStackEntry ->
                     ScanQrScreen(
                         onBackPressed = { navController.navigateUp() },
                         onMdocQrCodeScanned = { mdocUri ->
@@ -323,12 +321,12 @@ class App(
                                     )
                                 )
                                 navController.popBackStack()
-                                navController.navigate(route = TransferDestination.route)
+                                navController.navigate(route = TransferDestination)
                             }
                         }
                     )
                 }
-                composable(route = SelectRequestDestination.route) {
+                composable<SelectRequestDestination> { backStackEntry ->
                     SelectRequestScreen(
                         readerModel = readerModel,
                         settingsModel = settingsModel,
@@ -336,24 +334,24 @@ class App(
                         onBackPressed = { urlLaunchData?.finish() ?: navController.navigateUp() },
                         onContinueClicked = {
                             navController.popBackStack()
-                            navController.navigate(route = TransferDestination.route)
+                            navController.navigate(route = TransferDestination)
                         },
                         onReaderIdentitiesClicked = {
-                            navController.navigate(ReaderIdentityDestination.route)
+                            navController.navigate(route = ReaderIdentityDestination)
                         }
                     )
                 }
-                composable(route = TransferDestination.route) {
+                composable<TransferDestination> { backStackEntry ->
                     TransferScreen(
                         readerModel = readerModel,
                         onBackPressed = { urlLaunchData?.finish() ?: navController.navigateUp() },
                         onTransferComplete = {
                             navController.popBackStack()
-                            navController.navigate(route = ShowResultsDestination.route)
+                            navController.navigate(route = ShowResultsDestination)
                         }
                     )
                 }
-                composable(route = ShowResultsDestination.route) {
+                composable<ShowResultsDestination> {
                     ShowResultsScreen(
                         readerQuery = ReaderQuery.valueOf(settingsModel.selectedQueryName.value),
                         readerModel = readerModel,
@@ -361,13 +359,13 @@ class App(
                         issuerTrustManager = compositeTrustManager,
                         onBackPressed = { urlLaunchData?.finish() ?: navController.navigateUp() },
                         onShowDetailedResults = if (settingsModel.devMode.value) {
-                            { navController.navigate(ShowDetailedResultsDestination.route) }
+                            { navController.navigate(route = ShowDetailedResultsDestination) }
                         } else {
                             null
                         }
                     )
                 }
-                composable(route = ShowDetailedResultsDestination.route) {
+                composable<ShowDetailedResultsDestination> { backStackEntry ->
                     ShowDetailedResultsScreen(
                         readerQuery = ReaderQuery.valueOf(settingsModel.selectedQueryName.value),
                         readerModel = readerModel,
@@ -377,18 +375,18 @@ class App(
                         onShowCertificateChain = { certificateChain ->
                             val certificateDataBase64 = Cbor.encode(certificateChain.toDataItem()).toBase64Url()
                             navController.navigate(
-                                route = CertificateViewerDestination.route + "/" + certificateDataBase64
+                                route = CertificateViewerDestination(certificateDataBase64)
                             )
                         },
                     )
                 }
-                composable(route = DeveloperSettingsDestination.route) {
+                composable<DeveloperSettingsDestination> { backStackEntry ->
                     DeveloperSettingsScreen(
                         settingsModel = settingsModel,
                         onBackPressed = { navController.navigateUp() },
                     )
                 }
-                composable(route = ReaderIdentityDestination.route) {
+                composable<ReaderIdentityDestination> { backStackEntry ->
                     ReaderIdentityScreen(
                         promptModel = promptModel,
                         readerBackendClient = readerBackendClient,
@@ -397,12 +395,12 @@ class App(
                         onShowCertificateChain = { certificateChain ->
                             val certificateDataBase64 = Cbor.encode(certificateChain.toDataItem()).toBase64Url()
                             navController.navigate(
-                                route = CertificateViewerDestination.route + "/" + certificateDataBase64
+                                route = CertificateViewerDestination(certificateDataBase64)
                             )
                         },
                     )
                 }
-                composable(route = TrustedIssuersDestination.route) {
+                composable<TrustedIssuersDestination> { backStackEntry ->
                     TrustedIssuersScreen(
                         builtInTrustManager = builtInTrustManager,
                         userTrustManager = userTrustManager,
@@ -410,98 +408,80 @@ class App(
                         onBackPressed = { navController.navigateUp() },
                         onTrustEntryClicked = { trustManagerId, entryIndex, justImported ->
                             navController.navigate(
-                                route = TrustEntryViewerDestination.route +
-                                        "/" + trustManagerId + "/" + entryIndex + "/" + justImported
+                                route = TrustEntryViewerDestination(
+                                    trustManagerId = trustManagerId,
+                                    entryIndex = entryIndex,
+                                    justImported = justImported
+                                )
                             )
                         }
                     )
                 }
-                composable(route = AboutDestination.route) {
+                composable<AboutDestination> { backStackEntry ->
                     AboutScreen(
                         onBackPressed = { navController.navigateUp() },
                     )
                 }
-                composable(
-                    route = CertificateViewerDestination.routeWithArgs,
-                    arguments = CertificateViewerDestination.arguments
-                ) { backStackEntry ->
+                composable<CertificateViewerDestination> { backStackEntry ->
+                    val destination = backStackEntry.toRoute<CertificateViewerDestination>()
                     CertificateViewerScreen(
-                        certificateDataBase64 = backStackEntry.arguments?.getString(
-                            CertificateViewerDestination.CERTIFICATE_DATA_BASE64
-                        )!!,
+                        certificateDataBase64 = destination.certificateDataBase64,
                         onBackPressed = { navController.navigateUp() },
                     )
                 }
-                composable(
-                    route = TrustEntryViewerDestination.routeWithArgs,
-                    arguments = TrustEntryViewerDestination.arguments
-                ) { backStackEntry ->
+                composable<TrustEntryViewerDestination> { backStackEntry ->
+                    val destination = backStackEntry.toRoute<TrustEntryViewerDestination>()
                     TrustEntryViewerScreen(
                         builtInTrustManager = builtInTrustManager,
                         userTrustManager = userTrustManager,
-                        trustManagerId = backStackEntry.arguments?.getString(
-                            TrustEntryViewerDestination.TRUST_MANAGER_ID
-                        )!!,
-                        entryIndex = backStackEntry.arguments?.getInt(
-                            TrustEntryViewerDestination.ENTRY_INDEX
-                        )!!,
-                        justImported = backStackEntry.arguments?.getBoolean(
-                            TrustEntryViewerDestination.JUST_IMPORTED
-                        )!!,
+                        trustManagerId = destination.trustManagerId,
+                        entryIndex = destination.entryIndex,
+                        justImported = destination.justImported,
                         onBackPressed = { navController.navigateUp() },
                         onEditPressed = { entryIndex ->
                             navController.navigate(
-                                route = TrustEntryEditorDestination.route + "/" + entryIndex
+                                route = TrustEntryEditorDestination(entryIndex)
                             )
                         },
                         onShowVicalEntry = { trustManagerId, entryIndex, vicalCertNum ->
                             navController.navigate(
-                                route = VicalEntryViewerDestination.route +
-                                        "/" + trustManagerId + "/" + entryIndex + "/" + vicalCertNum
+                                route = VicalEntryViewerDestination(
+                                    trustManagerId = trustManagerId,
+                                    entryIndex = entryIndex,
+                                    certificateIndex = vicalCertNum
+                                )
                             )
                         },
                         onShowCertificate = { certificate ->
                             val certificateDataBase64 = Cbor.encode(certificate.toDataItem()).toBase64Url()
                             navController.navigate(
-                                route = CertificateViewerDestination.route + "/" + certificateDataBase64
+                                route = CertificateViewerDestination(certificateDataBase64)
                             )
                         },
                         onShowCertificateChain = { certificateChain ->
                             val certificateDataBase64 = Cbor.encode(certificateChain.toDataItem()).toBase64Url()
                             navController.navigate(
-                                route = CertificateViewerDestination.route + "/" + certificateDataBase64
+                                route = CertificateViewerDestination(certificateDataBase64)
                             )
                         },
                     )
                 }
-                composable(
-                    route = TrustEntryEditorDestination.routeWithArgs,
-                    arguments = TrustEntryEditorDestination.arguments
-                ) { backStackEntry ->
+                composable<TrustEntryEditorDestination> { backStackEntry ->
+                    val destination = backStackEntry.toRoute<TrustEntryEditorDestination>()
                     TrustEntryEditorScreen(
                         userTrustManager = userTrustManager,
-                        entryIndex = backStackEntry.arguments?.getInt(
-                            TrustEntryViewerDestination.ENTRY_INDEX
-                        )!!,
+                        entryIndex = destination.entryIndex,
                         onBackPressed = { navController.navigateUp() },
                     )
                 }
-                composable(
-                    route = VicalEntryViewerDestination.routeWithArgs,
-                    arguments = VicalEntryViewerDestination.arguments
-                ) { backStackEntry ->
+                composable<VicalEntryViewerDestination> { backStackEntry ->
+                    val destination = backStackEntry.toRoute<VicalEntryViewerDestination>()
                     VicalEntryViewerScreen(
                         builtInTrustManager = builtInTrustManager,
                         userTrustManager = userTrustManager,
-                        trustManagerId = backStackEntry.arguments?.getString(
-                            VicalEntryViewerDestination.TRUST_MANAGER_ID
-                        )!!,
-                        entryIndex = backStackEntry.arguments?.getInt(
-                            VicalEntryViewerDestination.ENTRY_INDEX
-                        )!!,
-                        certificateIndex = backStackEntry.arguments?.getInt(
-                            VicalEntryViewerDestination.CERTIFICATE_INDEX
-                        )!!,
+                        trustManagerId = destination.trustManagerId,
+                        entryIndex = destination.entryIndex,
+                        certificateIndex = destination.certificateIndex,
                         onBackPressed = { navController.navigateUp() },
                     )
                 }

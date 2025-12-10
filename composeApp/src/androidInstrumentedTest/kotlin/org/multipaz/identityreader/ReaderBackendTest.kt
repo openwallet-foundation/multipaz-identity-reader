@@ -109,7 +109,9 @@ class ReaderBackendTest {
             googleIdTokenVerifier = { idToken ->
                 Pair(idToken, SignedInGoogleUser(
                     id = "1234567890",
-                    email = "user@example.org"
+                    email = "user@example.org",
+                    displayName = "Example User",
+                    profilePictureUri = null
                 ))
             },
             getReaderIdentitiesForUser = getReaderIdentitiesForUser,

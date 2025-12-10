@@ -204,6 +204,8 @@ open class ReaderBackendClient(
         // Note: We only delete these keys if either we have enough good keys OR if we successfully
         // replenish. This is to avoid ending up in a situation where we don't have keys left!
 
+        Logger.i(TAG, "Num keys / num good keys: $numKeys / $numGoodKeys")
+        
         // Only replenish if we are running below 50%...
         if (numGoodKeys > numKeys/2) {
             toDelete.forEach {
@@ -322,7 +324,7 @@ open class ReaderBackendClient(
         } catch (e: ReaderIdentityNotAvailableException) {
             throw e
         } catch (e: Throwable) {
-            Logger.w(TAG, "Ignoring error replenishing keys: $e")
+            Logger.w(TAG, "Ignoring error replenishing keys", e)
         }
         // Return the oldest certificate
         val sortedCertifiedKeys = certifiedKeys!!.values

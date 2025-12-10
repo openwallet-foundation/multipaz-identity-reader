@@ -52,8 +52,8 @@ import org.multipaz.compose.decodeImage
 import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.documenttype.knowntypes.DrivingLicense
-import org.multipaz.documenttype.knowntypes.PhotoIDLowercase
-import org.multipaz.mdoc.response.DeviceResponseParser
+import org.multipaz.documenttype.knowntypes.PhotoID
+import org.multipaz.mdoc.response.DeviceResponse
 import org.multipaz.trustmanagement.TrustManager
 import org.multipaz.trustmanagement.TrustPoint
 import kotlin.time.Clock
@@ -69,7 +69,7 @@ fun ShowResultsScreen(
     onShowDetailedResults: (() -> Unit)?
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val documents = remember { mutableStateOf<List<MdocDocument>?>(null) }
+    val documents = remember { mutableStateOf<List<ParsedMdocDocument>?>(null) }
     val verificationError = remember { mutableStateOf<Throwable?>(null) }
     print("onShowDetailedResults: $onShowDetailedResults foo")
 
@@ -133,17 +133,17 @@ fun ShowResultsScreen(
     }
 }
 
-private data class MdocDocument(
+private data class ParsedMdocDocument(
     val docType: String,
     val msoValidFrom: Instant,
     val msoValidUntil: Instant,
     val msoSigned: Instant,
     val msoExpectedUpdate: Instant?,
-    val namespaces: List<MdocNamespace>,
+    val namespaces: List<ParsedMdocNamespace>,
     val trustPoint: TrustPoint
 )
 
-private data class MdocNamespace(
+private data class ParsedMdocNamespace(
     val name: String,
     val dataElements: Map<String, MdocClaim>
 )
@@ -156,28 +156,25 @@ private suspend fun parseResponse(
     readerModel: ReaderModel,
     documentTypeRepository: DocumentTypeRepository,
     issuerTrustManager: TrustManager
-): List<MdocDocument> {
-    val parser = DeviceResponseParser(
-        encodedDeviceResponse = readerModel.result!!.encodedDeviceResponse!!.toByteArray(),
-        encodedSessionTranscript = readerModel.result!!.encodedSessionTranscript.toByteArray()
+): List<ParsedMdocDocument> {
+    val deviceResponse = DeviceResponse.fromDataItem(Cbor.decode(
+        readerModel.result!!.encodedDeviceResponse!!.toByteArray()))
+    deviceResponse.verify(
+        sessionTranscript = Cbor.decode(readerModel.result!!.encodedSessionTranscript.toByteArray()),
+        eReaderKey = AsymmetricKey.AnonymousExplicit(
+            privateKey = readerModel.result!!.eReaderKey,
+        ),
+        atTime = now
     )
-    parser.setEphemeralReaderKey(AsymmetricKey.AnonymousExplicit(privateKey = readerModel.result!!.eReaderKey))
-    val deviceResponse = parser.parse()
 
-    val readerDocuments = mutableListOf<MdocDocument>()
+    val readerDocuments = mutableListOf<ParsedMdocDocument>()
     for (document in deviceResponse.documents) {
-        // TODO: validity checks and throw if not met
-        require(document.deviceSignedAuthenticated) { "Device Authentication failure" }
-        require(document.issuerSignedAuthenticated) { "Issuer Authentication failure" }
-        require(now >= document.validityInfoValidFrom && now <= document.validityInfoValidUntil) {
-            "Document is not valid at this point"
-        }
-        val trustResult = issuerTrustManager.verify(document.issuerCertificateChain.certificates, now)
+        val trustResult = issuerTrustManager.verify(document.issuerCertChain.certificates, now)
         require(trustResult.isTrusted) { "Document issuer isn't trusted" }
 
         val mdocType = documentTypeRepository.getDocumentTypeForMdoc(document.docType)?.mdocDocumentType
-        val resultNs = mutableListOf<MdocNamespace>()
-        for (namespace in document.issuerNamespaces) {
+        val resultNs = mutableListOf<ParsedMdocNamespace>()
+        for ((namespace, items) in document.issuerNamespaces.data) {
             val resultDataElements = mutableMapOf<String, MdocClaim>()
 
             val mdocNamespace = if (mdocType !=null) {
@@ -191,26 +188,25 @@ private suspend fun parseResponse(
                     ?.mdocDocumentType?.namespaces?.get(namespace)
             }
 
-            for (dataElement in document.getIssuerEntryNames(namespace)) {
-                val value = document.getIssuerEntryData(namespace, dataElement)
+            for ((dataElement, item) in items) {
                 val mdocDataElement = mdocNamespace?.dataElements?.get(dataElement)
                 resultDataElements[dataElement] = MdocClaim(
                     displayName = mdocDataElement?.attribute?.displayName ?: dataElement,
                     attribute = mdocDataElement?.attribute,
                     namespaceName = namespace,
                     dataElementName = dataElement,
-                    value = Cbor.decode(value)
+                    value = item.dataElementValue
                 )
             }
-            resultNs.add(MdocNamespace(namespace, resultDataElements))
+            resultNs.add(ParsedMdocNamespace(namespace, resultDataElements))
         }
         readerDocuments.add(
-            MdocDocument(
+            ParsedMdocDocument(
                 docType = document.docType,
-                msoValidFrom = document.validityInfoValidFrom,
-                msoValidUntil = document.validityInfoValidUntil,
-                msoSigned = document.validityInfoSigned,
-                msoExpectedUpdate = document.validityInfoExpectedUpdate,
+                msoValidFrom = document.mso.validFrom,
+                msoValidUntil = document.mso.validUntil,
+                msoSigned = document.mso.signedAt,
+                msoExpectedUpdate = document.mso.expectedUpdate,
                 namespaces = resultNs,
                 trustPoint = trustResult.trustPoints[0]
             )
@@ -311,7 +307,7 @@ private fun ShowResultsScreenFailed(
 @Composable
 private fun ShowResultsScreenSuccess(
     readerQuery: ReaderQuery,
-    documents: List<MdocDocument>,
+    documents: List<ParsedMdocDocument>,
     onShowDetailedResults: (() -> Unit)?
 ) {
     val successComposition by rememberLottieComposition {
@@ -389,7 +385,7 @@ private fun ShowResultsScreenSuccess(
 @Composable
 private fun ShowAgeOver(
     age: Int,
-    document: MdocDocument,
+    document: ParsedMdocDocument,
     onShowDetailedResults: (() -> Unit)?
 ) {
     val portraitBitmap = remember { getPortraitBitmap(document) }
@@ -398,8 +394,8 @@ private fun ShowAgeOver(
             val mdlNamespace = document.namespaces.find { it.name == DrivingLicense.MDL_NAMESPACE }
             mdlNamespace?.dataElements?.get("age_over_${age}")?.value?.asBoolean
         }
-        PhotoIDLowercase.PHOTO_ID_DOCTYPE_LOWERCASE -> {
-            val iso23220Namespace = document.namespaces.find { it.name == PhotoIDLowercase.ISO_23220_2_NAMESPACE }
+        PhotoID.PHOTO_ID_DOCTYPE -> {
+            val iso23220Namespace = document.namespaces.find { it.name == PhotoID.ISO_23220_2_NAMESPACE }
             iso23220Namespace?.dataElements?.get("age_over_${age}")?.value?.asBoolean
         }
         else -> null
@@ -460,7 +456,7 @@ private fun ShowAgeOver(
 
 @Composable
 private fun ShowIdentification(
-    document: MdocDocument,
+    document: ParsedMdocDocument,
     onShowDetailedResults: (() -> Unit)?
 ) {
     val portraitBitmap = remember { getPortraitBitmap(document) }
@@ -527,7 +523,7 @@ private fun ShowIdentification(
                 if (namespace.name == DrivingLicense.MDL_NAMESPACE && dataElementName == "portrait") {
                     continue
                 }
-                if (namespace.name == PhotoIDLowercase.ISO_23220_2_NAMESPACE && dataElementName == "portrait") {
+                if (namespace.name == PhotoID.ISO_23220_2_NAMESPACE && dataElementName == "portrait") {
                     continue
                 }
 
@@ -558,7 +554,7 @@ private fun KeyValuePairText(
     }
 }
 
-private fun getPortraitBitmap(document: MdocDocument): ImageBitmap? {
+private fun getPortraitBitmap(document: ParsedMdocDocument): ImageBitmap? {
     when (document.docType) {
         DrivingLicense.MDL_DOCTYPE -> {
             val mdlNamespace = document.namespaces.find { it.name == DrivingLicense.MDL_NAMESPACE }
@@ -571,8 +567,8 @@ private fun getPortraitBitmap(document: MdocDocument): ImageBitmap? {
             }
             return decodeImage(portraitClaim.value.asBstr)
         }
-        PhotoIDLowercase.PHOTO_ID_DOCTYPE_LOWERCASE -> {
-            val iso23220Namespace = document.namespaces.find { it.name == PhotoIDLowercase.ISO_23220_2_NAMESPACE }
+        PhotoID.PHOTO_ID_DOCTYPE -> {
+            val iso23220Namespace = document.namespaces.find { it.name == PhotoID.ISO_23220_2_NAMESPACE }
             if (iso23220Namespace == null) {
                 return null
             }
@@ -590,7 +586,7 @@ private fun getPortraitBitmap(document: MdocDocument): ImageBitmap? {
 
 @Composable
 private fun ShowResultDocument(
-    document: MdocDocument,
+    document: ParsedMdocDocument,
 ) {
     val portraitBitmap = remember { getPortraitBitmap(document) }
 

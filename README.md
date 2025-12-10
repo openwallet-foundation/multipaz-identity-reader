@@ -11,6 +11,20 @@ Learn more about [Kotlin Multiplatform](https://kotlinlang.org/docs/multiplatfor
 
 This is not an official or supported Google product.
 
+## Directory structure
+
+- [backend](backend) contains the server-side for Multipaz Identity Reader. An instance of this
+  is deployed at https://identityreader.multipaz.org/.
+- [libbackend](libbackend) contains most of the code used in `backend`. It's available as a library
+  to easier facilitate unit-testing with front-end code.
+- [libfrontend](libfrontend) contains business-logic and non-UI code for the frontend. This code is
+  used by both `composeApp` and `SwiftIdentityReader`.
+- [composeApp](composeApp) contains the Compose Multiplatform application.
+- [iosApp](iosApp) contains the Xcode project for running the Compose Multiplatform application.
+- [SwiftIdentityReader](SwiftIdentityReader) contains a Swift application intended to have the same
+  functionality as `composeApp`. This is experimental and in the future may either be deleted or
+  graduate to the same level of support as `composeApp`.
+
 ## Generating reader keys for import
 
 You can generate [PKCS#12](https://en.wikipedia.org/wiki/PKCS_12) files

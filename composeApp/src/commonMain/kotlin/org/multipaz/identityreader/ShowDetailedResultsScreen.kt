@@ -27,15 +27,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.multipaz.cbor.Cbor
+import org.multipaz.cbor.DataItem
 import org.multipaz.cbor.DiagnosticOption
 import org.multipaz.compose.datetime.formattedDateTime
 import org.multipaz.compose.decodeImage
+import org.multipaz.crypto.Algorithm
 import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.crypto.X509CertChain
 import org.multipaz.documenttype.DocumentAttributeType
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.documenttype.MdocDocumentType
-import org.multipaz.mdoc.response.DeviceResponseParser
+import org.multipaz.mdoc.devicesigned.DeviceAuth
+import org.multipaz.mdoc.response.DeviceResponse
 import org.multipaz.trustmanagement.TrustManager
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -238,44 +241,30 @@ private suspend fun parseResponse(
     ))
 
     if (result.encodedDeviceResponse != null) {
-        val parser = DeviceResponseParser(
-            encodedDeviceResponse = result.encodedDeviceResponse!!.toByteArray(),
-            encodedSessionTranscript = result.encodedSessionTranscript.toByteArray()
+        val deviceResponse = DeviceResponse.fromDataItem(Cbor.decode(result.encodedDeviceResponse!!.toByteArray()))
+        deviceResponse.verify(
+            sessionTranscript = Cbor.decode(result.encodedSessionTranscript.toByteArray()),
+            eReaderKey = AsymmetricKey.AnonymousExplicit(
+                privateKey = result.eReaderKey,
+            )
         )
-        parser.setEphemeralReaderKey(AsymmetricKey.AnonymousExplicit(privateKey = result.eReaderKey))
-        val deviceResponse = parser.parse()
 
         deviceResponse.documents.forEachIndexed { documentIndex, document ->
             val mdocDocumentType =
                 documentTypeRepository.getDocumentTypeForMdoc(document.docType)?.mdocDocumentType
             lines = mutableListOf()
             lines.add(Line("DocType", ValueText(document.docType)))
-            lines.add(Line("DeviceKey curve", ValueText(document.deviceKey.curve.name)))
+            lines.add(Line("DeviceKey curve", ValueText(document.mso.deviceKey.curve.name)))
             val deviceSignedResult =
-                if (document.deviceSignedAuthenticated) {
-                    if (document.deviceSignedAuthenticatedViaSignature) {
-                        "Authenticated (ECDSA signature)"
-                    } else {
-                        "Authenticated (MAC)"
-                    }
-                } else {
-                    if (document.deviceSignedAuthenticatedViaSignature) {
-                        "Not Authenticated (ECDSA signature)"
-                    } else {
-                        "Not Authenticated (MAC)"
-                    }
+                when (document.deviceAuth) {
+                    is DeviceAuth.Ecdsa -> "Authenticated (ECDSA signature)"
+                    is DeviceAuth.Mac -> "Authenticated (MAC)"
                 }
             lines.add(Line("Device Signed", ValueText(deviceSignedResult)))
-            val issuerSignedResult =
-                if (document.issuerSignedAuthenticated) {
-                    "Authenticated (${document.numIssuerEntryDigestMatchFailures} digest failures)"
-                } else {
-                    "Not Authenticated"
-                }
-            lines.add(Line("Issuer DS curve", ValueText(document.issuerCertificateChain.certificates.first().ecPublicKey.curve.name)))
-            lines.add(Line("Issuer Signed", ValueText(issuerSignedResult)))
+            lines.add(Line("Issuer DS curve", ValueText(document.issuerCertChain.certificates.first().ecPublicKey.curve.name)))
+            lines.add(Line("Issuer Signed", ValueText("Authenticated")))
             val trustResult =
-                issuerTrustManager.verify(document.issuerCertificateChain.certificates, now)
+                issuerTrustManager.verify(document.issuerCertChain.certificates, now)
             if (trustResult.isTrusted) {
                 val tpName =
                     trustResult.trustPoints.first().metadata?.displayName?.let { " ($it)" } ?: ""
@@ -286,42 +275,42 @@ private suspend fun parseResponse(
             lines.add(
                 Line(
                     "Issuer Certificate Chain",
-                    ValueCertChain(document.issuerCertificateChain),
-                    { onShowCertificateChain(document.issuerCertificateChain) }
+                    ValueCertChain(document.issuerCertChain),
+                    { onShowCertificateChain(document.issuerCertChain) }
                 )
             )
-            lines.add(Line("Valid from", ValueDateTime(document.validityInfoValidFrom)))
-            lines.add(Line("Valid until", ValueDateTime(document.validityInfoValidUntil)))
-            lines.add(Line("Signed at", ValueDateTime(document.validityInfoSigned)))
-            document.validityInfoExpectedUpdate?.let {
+            lines.add(Line("Valid from", ValueDateTime(document.mso.validFrom)))
+            lines.add(Line("Valid until", ValueDateTime(document.mso.validUntil)))
+            lines.add(Line("Signed at", ValueDateTime(document.mso.signedAt)))
+            document.mso.expectedUpdate?.let {
                 lines.add(Line("Expected update", ValueDateTime(it)))
             } ?: {
                 lines.add(Line("Expected update", ValueText("Not set")))
             }
 
-            for (namespace in document.issuerNamespaces) {
+            for ((namespace, items) in document.issuerNamespaces.data) {
                 lines.add(Line("Namespace", ValueText(namespace)))
-                for (dataElement in document.getIssuerEntryNames(namespace)) {
+                for ((dataElement, item) in items) {
                     lines.add(
                         lineForDataElement(
-                            document,
-                            mdocDocumentType,
-                            namespace,
-                            dataElement
+                            mdocDocumentType = mdocDocumentType,
+                            namespace = namespace,
+                            dataElement = dataElement,
+                            dataElementValue = item.dataElementValue
                         )
                     )
                 }
             }
 
-            for (namespace in document.deviceNamespaces) {
+            for ((namespace, items) in document.deviceNamespaces.data) {
                 lines.add(Line("Namespace (Device Signed)", ValueText(namespace)))
-                for (dataElement in document.getDeviceEntryNames(namespace)) {
+                for ((dataElement, dataElementValue) in items) {
                     lines.add(
                         lineForDataElement(
-                            document,
-                            mdocDocumentType,
-                            namespace,
-                            dataElement
+                            mdocDocumentType = mdocDocumentType,
+                            namespace = namespace,
+                            dataElement = dataElement,
+                            dataElementValue = dataElementValue
                         )
                     )
                 }
@@ -339,24 +328,23 @@ private suspend fun parseResponse(
 }
 
 private fun lineForDataElement(
-    document: DeviceResponseParser.Document,
     mdocDocumentType: MdocDocumentType?,
     namespace: String,
     dataElement: String,
+    dataElementValue: DataItem
 ): Line {
-    val cborValue = Cbor.decode(document.getIssuerEntryData(namespace, dataElement))
     val mdocDataElement = mdocDocumentType?.namespaces?.get(namespace)?.dataElements?.get(dataElement)
     if (mdocDataElement != null) {
         if (mdocDataElement.attribute.type == DocumentAttributeType.Picture) {
-            val text = mdocDataElement.renderValue(cborValue)
-            val image = decodeImage(cborValue.asBstr)
+            val text = mdocDataElement.renderValue(dataElementValue)
+            val image = decodeImage(dataElementValue.asBstr)
             return Line(mdocDataElement.attribute.displayName, ValueImage(text, image))
         } else {
-            val text = mdocDataElement.renderValue(cborValue)
+            val text = mdocDataElement.renderValue(dataElementValue)
             return Line(mdocDataElement.attribute.displayName, ValueText(text))
         }
     } else {
-        val text = Cbor.toDiagnostics(cborValue, setOf(DiagnosticOption.BSTR_PRINT_LENGTH))
+        val text = Cbor.toDiagnostics(dataElementValue, setOf(DiagnosticOption.BSTR_PRINT_LENGTH))
         return Line(dataElement, ValueText(text))
     }
 }

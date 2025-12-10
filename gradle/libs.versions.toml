@@ -1,33 +1,35 @@
 [versions]
-agp = "8.11.1"
+agp = "8.13.2"
 android-compileSdk = "36"
 android-minSdk = "26"
 android-targetSdk = "36"
-androidx-activity = "1.10.1"
+androidx-activity = "1.12.1"
 androidx-espresso = "3.7.0"
 androidx-testExt = "1.3.0"
-composeMultiplatform = "1.8.2"
-kotlin = "2.2.0"
+composeMultiplatform = "1.9.3"
+kotlin = "2.2.21"
 kotlinx-coroutines = "1.10.2"
-kotlinx-io = "0.8.0"
+kotlinx-io = "0.8.2"
 kotlinx-datetime = "0.7.1"
 kotlinx-serialization = "1.9.0"
-ksp = "2.2.0-2.0.2"
-multipaz = "0.96.0-pre.8.6cf5e818"
+ksp = "2.3.3"
+multipaz = "0.96.0"
 ktor = "2.3.13"
-logback = "1.5.18"
+logback = "1.5.21"
 hsqldb = "2.7.4"
 mysql = "8.0.33"
-jetbrains-navigation = "2.8.0-alpha10"
-jetbrains-lifecycle = "2.8.2"
-androidx-fragment = "1.8.8"
-compottie = "2.0.0-rc04"
-buildconfig = "5.6.7"
+jetbrains-navigation = "2.9.1"
+jetbrains-lifecycle = "2.9.6"
+androidx-fragment = "1.8.9"
+compottie = "2.0.2"
+buildconfig = "6.0.6"
 semver = "3.0.0"
 androidx-credentials = "1.5.0"
 play-services-auth = "21.4.0"
 identity-googleid = "1.1.1"
-identity-google-api-client = "2.8.0"
+identity-google-api-client = "2.8.1"
+skie = "0.10.8"
+monitor = "1.8.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -64,6 +66,7 @@ androidx-credentials = { module = "androidx.credentials:credentials", version.re
 play-services-auth = {module = "com.google.android.gms:play-services-auth", version.ref = "play-services-auth" }
 identity-googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "identity-googleid" }
 identity-google-api-client = { module = "com.google.api-client:google-api-client", version.ref = "identity-google-api-client" }
+androidx-monitor = { group = "androidx.test", name = "monitor", version.ref = "monitor" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
@@ -75,3 +78,4 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ktor = { id = "io.ktor.plugin", version.ref = "ktor" }
 buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "buildconfig" }
+skie = { id = "co.touchlab.skie", version.ref = "skie" }
