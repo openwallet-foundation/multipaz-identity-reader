@@ -324,7 +324,7 @@ private fun StartScreenWithPermissions(
             }
         )
     }
-    val nfcProgress by animateLottieCompositionAsState(
+    val nfcProgressState = animateLottieCompositionAsState(
         composition = nfcComposition,
         iterations = Compottie.IterateForever
     )
@@ -425,7 +425,7 @@ private fun StartScreenWithPermissions(
             Image(
                 painter = rememberLottiePainter(
                     composition = nfcComposition,
-                    progress = { nfcProgress },
+                    progress = { nfcProgressState.value },
                 ),
                 contentDescription = null,
                 modifier = Modifier.size(200.dp)

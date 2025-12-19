@@ -37,7 +37,7 @@ fun TransferScreen(
             Res.readBytes("files/waiting_animation.json").decodeToString()
         )
     }
-    val waitingProgress by animateLottieCompositionAsState(
+    val waitingProgressState = animateLottieCompositionAsState(
         composition = waitingComposition,
         iterations = Compottie.IterateForever
     )
@@ -77,7 +77,7 @@ fun TransferScreen(
                 Image(
                     painter = rememberLottiePainter(
                         composition = waitingComposition,
-                        progress = { waitingProgress },
+                        progress = { waitingProgressState.value },
                     ),
                     contentDescription = null,
                     modifier = Modifier.size(300.dp)
@@ -92,4 +92,3 @@ fun TransferScreen(
         }
     }
 }
-

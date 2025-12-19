@@ -251,7 +251,7 @@ private fun ShowResultsScreenFailed(
             Res.readBytes("files/error_animation.json").decodeToString()
         )
     }
-    val errorProgress by animateLottieCompositionAsState(
+    val errorProgressState = animateLottieCompositionAsState(
         composition = errorComposition,
     )
 
@@ -269,7 +269,7 @@ private fun ShowResultsScreenFailed(
             Image(
                 painter = rememberLottiePainter(
                     composition = errorComposition,
-                    progress = { errorProgress },
+                    progress = { errorProgressState.value },
                 ),
                 contentDescription = null,
                 modifier = Modifier.size(200.dp)
@@ -310,15 +310,6 @@ private fun ShowResultsScreenSuccess(
     documents: List<ParsedMdocDocument>,
     onShowDetailedResults: (() -> Unit)?
 ) {
-    val successComposition by rememberLottieComposition {
-        LottieCompositionSpec.JsonString(
-            Res.readBytes("files/success_animation.json").decodeToString()
-        )
-    }
-    val successProgress by animateLottieCompositionAsState(
-        composition = successComposition,
-    )
-
     // For now we only consider the first document...
     val document = documents[0]
 
@@ -414,7 +405,7 @@ private fun ShowAgeOver(
             Res.readBytes(animationFile).decodeToString()
         )
     }
-    val progress by animateLottieCompositionAsState(
+    val progressState = animateLottieCompositionAsState(
         composition = composition,
     )
 
@@ -440,7 +431,7 @@ private fun ShowAgeOver(
         Image(
             painter = rememberLottiePainter(
                 composition = composition,
-                progress = { progress },
+                progress = { progressState.value },
             ),
             contentDescription = null,
             modifier = Modifier.size(50.dp)
@@ -465,7 +456,7 @@ private fun ShowIdentification(
             Res.readBytes("files/success_animation.json").decodeToString()
         )
     }
-    val progress by animateLottieCompositionAsState(
+    val progressState = animateLottieCompositionAsState(
         composition = composition,
     )
 
@@ -491,7 +482,7 @@ private fun ShowIdentification(
         Image(
             painter = rememberLottiePainter(
                 composition = composition,
-                progress = { progress },
+                progress = { progressState.value },
             ),
             contentDescription = null,
             modifier = Modifier.size(50.dp)

@@ -104,6 +104,9 @@ open class ReaderBackendClient(
             setBody(Json.encodeToString(request))
         }
         val responseBody = response.body<ByteArray>().decodeToString()
+        if (response.status != HttpStatusCode.OK) {
+            throw IllegalStateException("Error communicating with server: ${response.status} - $responseBody")
+        }
         return Pair(
             response.status,
             Json.decodeFromString<JsonObject>(responseBody)

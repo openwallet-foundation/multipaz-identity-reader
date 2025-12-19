@@ -8,7 +8,6 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
-    alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.buildconfig)
     alias(libs.plugins.ksp)
 }
@@ -95,8 +94,6 @@ kotlin {
                 implementation(compose.components.resources)
                 implementation(compose.components.uiToolingPreview)
                 implementation(compose.materialIconsExtended)
-                implementation(libs.jetbrains.navigation.compose)
-                implementation(libs.jetbrains.navigation.runtime)
                 implementation(libs.jetbrains.lifecycle.viewmodel.compose)
 
                 implementation(libs.multipaz)
@@ -111,6 +108,7 @@ kotlin {
                 implementation(libs.ktor.network)
                 implementation(libs.compottie)
                 implementation(libs.semver)
+                implementation(libs.bundles.nav3)
             }
         }
         commonTest.dependencies {
@@ -183,5 +181,3 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
 tasks["compileKotlinIosX64"].dependsOn("kspCommonMainKotlinMetadata")
 tasks["compileKotlinIosArm64"].dependsOn("kspCommonMainKotlinMetadata")
 tasks["compileKotlinIosSimulatorArm64"].dependsOn("kspCommonMainKotlinMetadata")
-
-
