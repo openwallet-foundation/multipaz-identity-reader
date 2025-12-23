@@ -24,12 +24,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.bytestring.ByteString
+import multipazidentityreader.composeapp.generated.resources.Res
 import org.multipaz.cbor.Cbor
 import org.multipaz.cbor.Simple
 import org.multipaz.compose.prompt.PromptDialogs
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.documenttype.knowntypes.DrivingLicense
+import org.multipaz.documenttype.knowntypes.Loyalty
 import org.multipaz.documenttype.knowntypes.PhotoID
+import org.multipaz.facematch.FaceMatchLiteRtModel
 import org.multipaz.mdoc.transport.MdocTransportOptions
 import org.multipaz.trustmanagement.CompositeTrustManager
 import org.multipaz.trustmanagement.TrustEntryVical
@@ -71,6 +74,7 @@ class App(
     private lateinit var compositeTrustManager: TrustManager
     private lateinit var settingsModel: SettingsModel
     private lateinit var readerBackendClient: ReaderBackendClient
+    private lateinit var faceMatchLiteRtModel: FaceMatchLiteRtModel
 
     private fun getMdocTransportOptionsForNfcEngagement() =
         MdocTransportOptions(
@@ -113,6 +117,7 @@ class App(
             documentTypeRepository = DocumentTypeRepository()
             documentTypeRepository.addDocumentType(DrivingLicense.getDocumentType())
             documentTypeRepository.addDocumentType(PhotoID.getDocumentType())
+            documentTypeRepository.addDocumentType(Loyalty.getDocumentType())
             // Note: builtInTrustManager will be populated at app startup, see updateBuiltInIssuers()
             //   and its call-sites
             builtInTrustManager = TrustManagerLocal(
@@ -136,6 +141,10 @@ class App(
                 secureArea = Platform.getSecureArea(),
                 numKeys = 10,
             )
+
+            val modelData = ByteString(Res.readBytes("files/facenet_512.tflite"))
+            faceMatchLiteRtModel =
+                FaceMatchLiteRtModel(modelData, imageSquareSize = 160, embeddingsArraySize = 512)
 
             initialized = true
         }
@@ -357,6 +366,7 @@ class App(
                         readerModel = readerModel,
                         documentTypeRepository = documentTypeRepository,
                         issuerTrustManager = compositeTrustManager,
+                        faceMatchLiteRtModel = faceMatchLiteRtModel,
                         onBackPressed = { urlLaunchData?.finish() ?: navController.navigateUp() },
                         onShowDetailedResults = if (settingsModel.devMode.value) {
                             { navController.navigate(route = ShowDetailedResultsDestination) }

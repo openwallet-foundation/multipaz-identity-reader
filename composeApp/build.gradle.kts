@@ -101,6 +101,7 @@ kotlin {
 
                 implementation(libs.multipaz)
                 implementation(libs.multipaz.compose)
+                implementation(libs.multipaz.vision)
                 implementation(libs.multipaz.doctypes)
 
                 implementation(libs.kotlinx.datetime)

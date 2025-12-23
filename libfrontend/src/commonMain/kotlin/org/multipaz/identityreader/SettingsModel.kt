@@ -135,7 +135,7 @@ class SettingsModel private constructor(
 
     private suspend fun init() {
         bind(logTransactions, "logTransactions", false)
-        bind(selectedQueryName, "selectedQueryName", ReaderQuery.AGE_OVER_21.name)
+        bind(selectedQueryName, "selectedQueryName", ReaderQuery.WHOLESALE_MEMBERSHIP.name)
         bind(builtInIssuersUpdatedAt, "builtInIssuersUpdatedAt", Instant.DISTANT_PAST)
         bind(builtInIssuersVersion, "builtInIssuersVersion", Long.MIN_VALUE)
         bind(readerAuthMethod, "readerAuthMethod", ReaderAuthMethod.STANDARD_READER_AUTH)
@@ -153,7 +153,7 @@ class SettingsModel private constructor(
     }
 
     val logTransactions = MutableStateFlow<Boolean>(false)
-    val selectedQueryName = MutableStateFlow<String>(ReaderQuery.AGE_OVER_21.name)
+    val selectedQueryName = MutableStateFlow<String>(ReaderQuery.WHOLESALE_MEMBERSHIP.name)
     val builtInIssuersUpdatedAt = MutableStateFlow<Instant>(Instant.DISTANT_PAST)
     val builtInIssuersVersion = MutableStateFlow<Long>(Long.MIN_VALUE)
     val readerAuthMethod = MutableStateFlow<ReaderAuthMethod>(ReaderAuthMethod.STANDARD_READER_AUTH)
