@@ -2,8 +2,10 @@ package org.multipaz.identityreader
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,16 +17,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,16 +51,37 @@ import io.github.alexzhirkevich.compottie.rememberLottiePainter
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import multipazidentityreader.composeapp.generated.resources.Res
+import multipazidentityreader.composeapp.generated.resources.app_icon
+import org.jetbrains.compose.resources.painterResource
 import org.multipaz.cbor.Cbor
 import org.multipaz.claim.MdocClaim
+import org.multipaz.compose.camera.Camera
+import org.multipaz.compose.camera.CameraCaptureResolution
+import org.multipaz.compose.camera.CameraFrame
+import org.multipaz.compose.camera.CameraSelection
+import org.multipaz.compose.cropRotateScaleImage
 import org.multipaz.compose.decodeImage
 import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.documenttype.knowntypes.DrivingLicense
+import org.multipaz.documenttype.knowntypes.Loyalty
 import org.multipaz.documenttype.knowntypes.PhotoID
+import org.multipaz.facedetection.DetectedFace
+import org.multipaz.facedetection.FaceLandmarkType
+import org.multipaz.facedetection.detectFaces
+import org.multipaz.facematch.FaceMatchLiteRtModel
+import org.multipaz.facematch.getFaceEmbeddings
 import org.multipaz.mdoc.response.DeviceResponse
 import org.multipaz.trustmanagement.TrustManager
 import org.multipaz.trustmanagement.TrustPoint
+import kotlin.collections.component1
+import kotlin.collections.component2
+import kotlin.collections.iterator
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.max
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -65,6 +91,7 @@ fun ShowResultsScreen(
     readerModel: ReaderModel,
     documentTypeRepository: DocumentTypeRepository,
     issuerTrustManager: TrustManager,
+    faceMatchLiteRtModel: FaceMatchLiteRtModel,
     onBackPressed: () -> Unit,
     onShowDetailedResults: (() -> Unit)?
 ) {
@@ -124,6 +151,7 @@ fun ShowResultsScreen(
                         ShowResultsScreenSuccess(
                             readerQuery = readerQuery,
                             documents = documents.value!!,
+                            faceMatchLiteRtModel = faceMatchLiteRtModel,
                             onShowDetailedResults = onShowDetailedResults
                         )
                     }
@@ -308,6 +336,7 @@ private fun ShowResultsScreenFailed(
 private fun ShowResultsScreenSuccess(
     readerQuery: ReaderQuery,
     documents: List<ParsedMdocDocument>,
+    faceMatchLiteRtModel: FaceMatchLiteRtModel,
     onShowDetailedResults: (() -> Unit)?
 ) {
     val successComposition by rememberLottieComposition {
@@ -355,26 +384,11 @@ private fun ShowResultsScreenSuccess(
             }
 
             when (readerQuery) {
-                ReaderQuery.AGE_OVER_18 -> {
-                    ShowAgeOver(
-                        age = 18,
+                ReaderQuery.WHOLESALE_MEMBERSHIP -> {
+                    ShowMemberShipCard(
                         document = document,
-                        onShowDetailedResults = onShowDetailedResults
-                    )
-                }
-
-                ReaderQuery.AGE_OVER_21 -> {
-                    ShowAgeOver(
-                        age = 21,
-                        document = document,
-                        onShowDetailedResults = onShowDetailedResults
-                    )
-                }
-
-                ReaderQuery.IDENTIFICATION -> {
-                    ShowIdentification(
-                        document = document,
-                        onShowDetailedResults = onShowDetailedResults
+                        faceMatchLiteRtModel = faceMatchLiteRtModel,
+                        onShowDetailedResults = onShowDetailedResults,
                     )
                 }
             }
@@ -578,6 +592,17 @@ private fun getPortraitBitmap(document: ParsedMdocDocument): ImageBitmap? {
             }
             return decodeImage(portraitClaim.value.asBstr)
         }
+        Loyalty.LOYALTY_DOCTYPE -> {
+            val loyaltyNamespace = document.namespaces.find { it.name == Loyalty.LOYALTY_NAMESPACE }
+            if (loyaltyNamespace == null) {
+                return null
+            }
+            val portraitClaim = loyaltyNamespace.dataElements["portrait"]
+            if (portraitClaim == null) {
+                return null
+            }
+            return decodeImage(portraitClaim.value.asBstr)
+        }
         else -> {
             return null
         }
@@ -621,4 +646,217 @@ private fun ShowResultDocument(
             }
         }
     }
+}
+
+@Composable
+private fun ShowMemberShipCard(
+    document: ParsedMdocDocument,
+    faceMatchLiteRtModel: FaceMatchLiteRtModel,
+    onShowDetailedResults: (() -> Unit)?,
+) {
+    val portraitBitmap = remember { getPortraitBitmap(document) }
+
+    val composition by rememberLottieComposition {
+        LottieCompositionSpec.JsonString(
+            Res.readBytes("files/success_animation.json").decodeToString()
+        )
+    }
+    val progress by animateLottieCompositionAsState(
+        composition = composition,
+    )
+
+    var showFaceVerification by remember { mutableStateOf(false) }
+    var showVerifiedDialog by remember { mutableStateOf(false) }
+
+    var similarity by remember { mutableStateOf(0f) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(300.dp)
+            .padding(16.dp)
+            .clickable { showFaceVerification = true },
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Image(
+            modifier = Modifier
+                .matchParentSize()
+                .let {
+                    if (onShowDetailedResults != null) {
+                        it.combinedClickable(
+                            onClick = {},
+                            onDoubleClick = { onShowDetailedResults() }
+                        )
+                    } else it
+                },
+            bitmap = portraitBitmap!!,
+            contentDescription = null
+        )
+
+        Text(
+            modifier = Modifier
+                .padding(8.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.Black.copy(alpha = 0.5f))
+                .padding(8.dp),
+            text = "Verify Face",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 16.sp,
+        )
+    }
+
+    if (showFaceVerification) {
+        Text("Similarity: ${(similarity * 100).roundToInt()}%")
+
+        Camera(
+            modifier = Modifier
+                .fillMaxSize(0.5f)
+                .padding(64.dp),
+            cameraSelection = CameraSelection.DEFAULT_FRONT_CAMERA,
+            captureResolution = CameraCaptureResolution.MEDIUM,
+            showCameraPreview = true,
+        ) { incomingVideoFrame: CameraFrame ->
+
+            val faces: List<DetectedFace>? = detectFaces(incomingVideoFrame)
+
+            if (faces.isNullOrEmpty()) {
+                similarity = 0f;
+            } else {
+                val faceImage =
+                    extractFaceBitmap(
+                        incomingVideoFrame,
+                        faces[0], // assuming only one face exists for simplicity
+                        faceMatchLiteRtModel.imageSquareSize
+                    )
+
+                val faceInsetsForDetectedFace =
+                    getFaceEmbeddings(faceImage, faceMatchLiteRtModel)
+                val portraitEmbedding = portraitBitmap?.let { getFaceEmbeddings(it, faceMatchLiteRtModel) }
+
+                if (faceInsetsForDetectedFace != null && portraitEmbedding != null) {
+                    similarity = faceInsetsForDetectedFace.calculateSimilarity(
+                        portraitEmbedding
+                    )
+
+                    similarity = max(similarity, 0f)
+
+                    if (similarity > 0.5f) {
+                        showVerifiedDialog = true
+                        showFaceVerification = false
+                    }
+                }
+            }
+        }
+    }
+
+    if (showVerifiedDialog) {
+        AlertDialog(
+            onDismissRequest = { showVerifiedDialog = false },
+            title = { Text("Face Verified") },
+            text = { Text("Face verified successfully") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showVerifiedDialog = false
+                }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Image(
+            painter = rememberLottiePainter(
+                composition = composition,
+                progress = { progress },
+            ),
+            contentDescription = null,
+            modifier = Modifier.size(50.dp)
+        )
+        Text(
+            text = "Identity data verified",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape = RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        for (namespace in document.namespaces) {
+            for ((dataElementName, dataElement) in namespace.dataElements) {
+                val key = if (dataElement.attribute != null) {
+                    dataElement.attribute!!.displayName
+                } else {
+                    dataElementName
+                }
+                val value = dataElement.render(TimeZone.currentSystemDefault())
+
+                if (namespace.name == PhotoID.ISO_23220_2_NAMESPACE && dataElementName == "portrait") {
+                    continue
+                }
+
+                KeyValuePairText(key, value)
+            }
+        }
+    }
+}
+
+
+/** Cut out the face square, rotate it to level eyes line, scale to the smaller size for face matching tasks. */
+private fun extractFaceBitmap(
+    frameData: CameraFrame,
+    face: DetectedFace,
+    targetSize: Int
+): ImageBitmap {
+    val leftEye = face.landmarks.find { it.type == FaceLandmarkType.LEFT_EYE }
+    val rightEye = face.landmarks.find { it.type == FaceLandmarkType.RIGHT_EYE }
+    val mouthPosition = face.landmarks.find { it.type == FaceLandmarkType.MOUTH_BOTTOM }
+
+    if (leftEye == null || rightEye == null || mouthPosition == null) {
+        return frameData.cameraImage.toImageBitmap()
+    }
+
+    // Heuristic multiplier to fit the face normalized to the eyes pupilar distance.
+    val faceCropFactor = 4f
+
+    // Heuristic multiplier to offset vertically so the face is better centered within the rectangular crop.
+    val faceVerticalOffsetFactor = 0.25f
+
+    var faceCenterX = (leftEye.position.x + rightEye.position.x) / 2
+    var faceCenterY = (leftEye.position.y + rightEye.position.y) / 2
+    val eyeOffsetX = leftEye.position.x - rightEye.position.x
+    val eyeOffsetY = leftEye.position.y - rightEye.position.y
+    val eyeDistance = sqrt(eyeOffsetX * eyeOffsetX + eyeOffsetY * eyeOffsetY)
+    val faceWidth = eyeDistance * faceCropFactor
+    val faceVerticalOffset = eyeDistance * faceVerticalOffsetFactor
+    if (frameData.isLandscape) {
+        /** Required for iOS capable of upside-down face detection. */
+        faceCenterY += faceVerticalOffset * (if (leftEye.position.y < mouthPosition.position.y) 1 else -1)
+    } else {
+        /** Required for iOS capable of upside-down face detection. */
+        faceCenterX -= faceVerticalOffset * (if (leftEye.position.x < mouthPosition.position.x) -1 else 1)
+    }
+    val eyesAngleRad = atan2(eyeOffsetY, eyeOffsetX)
+    val eyesAngleDeg = eyesAngleRad * 180.0 / PI // Convert radians to degrees
+    val totalRotationDegrees = 180 - eyesAngleDeg
+
+    // Call platform dependent bitmap transformation.
+    return cropRotateScaleImage(
+        frameData = frameData, // Platform-specific image data.
+        cx = faceCenterX.toDouble(), // Point between eyes
+        cy = faceCenterY.toDouble(), // Point between eyes
+        angleDegrees = totalRotationDegrees, //includes the camera rotation and eyes rotation.
+        outputWidthPx = faceWidth.toInt(), // Expected face width for cropping *before* final scaling.
+        outputHeightPx = faceWidth.toInt(),// Expected face height for cropping *before* final scaling.
+        targetWidthPx = targetSize, // Final square image size (for database saving and face matching tasks).
+    )
 }
