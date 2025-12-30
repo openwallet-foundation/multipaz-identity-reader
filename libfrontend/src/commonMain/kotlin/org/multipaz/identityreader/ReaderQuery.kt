@@ -136,8 +136,6 @@ suspend fun generateEncodedDeviceRequest(
             loyaltyIdNs.put("tier", intentToRetain)
             loyaltyIdNs.put("issue_date", intentToRetain)
             loyaltyIdNs.put("expiry_date", intentToRetain)
-
-            loyaltyIdNs.put("age_over_21", intentToRetain)
         }
     }
     val deviceRequestInfo =
