@@ -160,11 +160,20 @@ suspend fun generateEncodedDeviceRequest(
         sessionTranscript = Cbor.decode(encodedSessionTranscript),
         deviceRequestInfo = deviceRequestInfo
     ) {
-        addDocRequest(
-            docType = loyaltyDoctype,
-            nameSpaces = loyaltyIdItemsToRequest,
-            docRequestInfo = null
-        )
+        if (readerKey != null) {
+            addDocRequest(
+                docType = loyaltyDoctype,
+                nameSpaces = loyaltyIdItemsToRequest,
+                docRequestInfo = null,
+                readerKey = readerKey
+            )
+        } else {
+            addDocRequest(
+                docType = loyaltyDoctype,
+                nameSpaces = loyaltyIdItemsToRequest,
+                docRequestInfo = null,
+            )
+        }
     }
     Logger.iCbor(TAG, "deviceRequest", deviceRequest.toDataItem())
     return Cbor.encode(deviceRequest.toDataItem())
