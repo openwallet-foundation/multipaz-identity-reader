@@ -91,7 +91,6 @@ fun ReaderIdentityScreen(
                                     PassphraseEvaluation.OK
                                 } catch (e: WrongPassphraseException) {
                                     Logger.w(TAG, "Wrong passphrase", e)
-                                    "Wrong passphrase. Try again"
                                     PassphraseEvaluation.TryAgain
                                 } catch (_: Throwable) {
                                     // If parsing fails for reasons other than the wrong passphrase

@@ -155,7 +155,7 @@ fun TrustedIssuersScreen(
                 coroutineScope.launch {
                     try {
                         val cert = X509Cert.fromPem(pemEncoding = files[0].toByteArray().decodeToString())
-                        val entry = userTrustManager.addX509Cert(
+                        val unused = userTrustManager.addX509Cert(
                             certificate = cert,
                             metadata = TrustMetadata()
                         )
@@ -182,11 +182,11 @@ fun TrustedIssuersScreen(
                     try {
                         val encodedSignedVical = files[0]
                         // Parse it once, to check the signature is good
-                        val signedVical = SignedVical.parse(
+                        val unused1 = SignedVical.parse(
                             encodedSignedVical = encodedSignedVical.toByteArray(),
                             disableSignatureVerification = false
                         )
-                        val entry = userTrustManager.addVical(
+                        val unused2 = userTrustManager.addVical(
                             encodedSignedVical = encodedSignedVical,
                             metadata = TrustMetadata()
                         )

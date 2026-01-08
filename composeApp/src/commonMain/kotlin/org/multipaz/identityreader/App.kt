@@ -186,18 +186,18 @@ class App(
                 builtInTrustManager.getEntries().forEach {
                     builtInTrustManager.deleteEntry(it)
                 }
-                entries.forEach {
-                    when (it) {
+                for (entry in entries) {
+                    when (entry) {
                         is TrustEntryX509Cert -> {
                             builtInTrustManager.addX509Cert(
-                                certificate = it.certificate,
-                                metadata = it.metadata
+                                certificate = entry.certificate,
+                                metadata = entry.metadata
                             )
                         }
                         is TrustEntryVical -> {
                             builtInTrustManager.addVical(
-                                encodedSignedVical = it.encodedSignedVical,
-                                metadata = it.metadata
+                                encodedSignedVical = entry.encodedSignedVical,
+                                metadata = entry.metadata
                             )
                         }
                     }

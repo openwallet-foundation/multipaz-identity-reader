@@ -65,8 +65,8 @@ class SettingsModel private constructor(
         key: String,
         defaultValue: T
     ) {
-        val value = settingsTable.get(key)?.let {
-            val dataItem = Cbor.decode(it.toByteArray())
+        val value = settingsTable.get(key)?.let { data ->
+            val dataItem = Cbor.decode(data.toByteArray())
             if (dataItem == Simple.NULL) {
                 null
             } else {
@@ -103,7 +103,9 @@ class SettingsModel private constructor(
                             ByteString::class -> (newValue as ByteString).toByteArray().toDataItem()
                             List::class -> {
                                 buildCborArray {
-                                    (newValue as List<*>).forEach { add(Tstr(it as String)) }
+                                    for (item in newValue as List<*>) {
+                                        add(Tstr(item as String))
+                                    }
                                 }
                             }
                             EcCurve::class -> (newValue as EcCurve).name.toDataItem()

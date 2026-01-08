@@ -101,7 +101,7 @@ enum class ReaderQuery(
                     encodedSessionTranscript = encodedSessionTranscript.toByteArray(),
                     readerKey = readerKey,
                 ).also {
-                    keyInfo?.let { readerBackendClient.markKeyAsUsed(it) }
+                    keyInfo?.let { info -> readerBackendClient.markKeyAsUsed(info) }
                 }
             }
             ReaderAuthMethod.CUSTOM_KEY -> {

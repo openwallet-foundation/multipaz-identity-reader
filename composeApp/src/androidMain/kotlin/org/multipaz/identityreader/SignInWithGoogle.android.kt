@@ -79,15 +79,12 @@ actual suspend fun signInWithGoogle(
     }
 }
 
-suspend private fun handleSignIn(
+private suspend fun handleSignIn(
     result: GetCredentialResponse,
     httpClientEngineFactory: HttpClientEngineFactory<*>,
 ): Pair<String, SignInWithGoogleUserData> {
     // Handle the successfully returned credential.
-    val credential = result.credential
-    val responseJson: String
-
-    when (credential) {
+    when (val credential = result.credential) {
         // GoogleIdToken credential
         is CustomCredential -> {
             if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
@@ -105,7 +102,7 @@ suspend private fun handleSignIn(
                     return Pair(
                         googleIdTokenCredential.idToken,
                         SignInWithGoogleUserData(
-                            id = googleIdTokenCredential.id,
+                            id = googleIdTokenCredential.id, // TODO: val id: String' is deprecated. Use uniqueId for the stable user identifier, or email for the user's email address.
                             givenName = googleIdTokenCredential.givenName,
                             familyName = googleIdTokenCredential.familyName,
                             displayName = googleIdTokenCredential.displayName,
