@@ -217,8 +217,6 @@ private suspend fun parseResponse(
 
 @Composable
 private fun ShowResultsScreenValidating() {
-    val coroutineScope = rememberCoroutineScope()
-
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -279,7 +277,9 @@ private fun ShowResultsScreenFailed(
                                 onClick = {},
                                 onDoubleClick = { onShowDetailedResults() }
                             )
-                        } else it
+                        } else {
+                            it
+                        }
                     },
             )
 
@@ -420,7 +420,9 @@ private fun ShowAgeOver(
                         onClick = {},
                         onDoubleClick = { onShowDetailedResults() }
                     )
-                } else it
+                } else {
+                    it
+                }
             },
         bitmap = portraitBitmap!!,
         contentDescription = null
@@ -471,7 +473,9 @@ private fun ShowIdentification(
                         onClick = {},
                         onDoubleClick = { onShowDetailedResults() }
                     )
-                } else it
+                } else {
+                    it
+                }
             },
         bitmap = portraitBitmap!!,
         contentDescription = null

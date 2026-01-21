@@ -11,7 +11,7 @@ import org.multipaz.nfc.NfcScanOptions
 import org.multipaz.nfc.NfcTagReader
 import kotlin.coroutines.CoroutineContext
 
-// Have to do this b/c SKIE doesn't handle parameters with suspend lambdas
+// Have to do this b/c SKIE doesn't handle parameters with suspend lambdas.
 suspend fun NfcTagReader.scanNfcMdocReaderMod1(
     message: String?,
     options: MdocTransportOptions,

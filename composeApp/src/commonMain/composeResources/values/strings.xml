@@ -1,12 +1,12 @@
 <resources>
-    <string name="back_button_content_description">Back</string>
+    <string name="back_button_content_description" translatable="false">Back</string>
 
-    <string name="start_screen_title">Identity Reader</string>
-    <string name="scan_qr_title">Scan QR code</string>
-    <string name="developer_settings_screen_title">Developer Settings</string>
-    <string name="reader_identity_title">Reader identity</string>
-    <string name="trusted_issuers_screen_title">Trusted issuers</string>
-    <string name="about_screen_title">About</string>
-    <string name="show_certificate_screen_title">Certificate</string>
-    <string name="show_certificate_screen_title_for_chain">Certificate chain</string>
+    <string name="start_screen_title" translatable="false">Identity Reader</string>
+    <string name="scan_qr_title" translatable="false">Scan QR code</string>
+    <string name="developer_settings_screen_title" translatable="false">Developer Settings</string>
+    <string name="reader_identity_title" translatable="false">Reader identity</string>
+    <string name="trusted_issuers_screen_title" translatable="false">Trusted issuers</string>
+    <string name="about_screen_title" translatable="false">About</string>
+    <string name="show_certificate_screen_title" translatable="false">Certificate</string>
+    <string name="show_certificate_screen_title_for_chain" translatable="false">Certificate chain</string>
 </resources>

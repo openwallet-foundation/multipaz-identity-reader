@@ -36,7 +36,6 @@ fun RequestingData(
 ) {
     val method = settingsModel.readerAuthMethod.collectAsState()
     val googleIdentity = settingsModel.readerAuthMethodGoogleIdentity.collectAsState()
-    val signedIn = settingsModel.signedIn.collectAsState()
     val (text, iconFn) = when (method.value) {
         ReaderAuthMethod.NO_READER_AUTH -> {
             Pair(

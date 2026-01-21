@@ -103,11 +103,8 @@ private fun CertificateViewer(
         val pagerState = rememberPagerState(pageCount = { listSize })
 
         Column(
-            modifier = Modifier.then(
-                if (listSize > 1)
-                    Modifier.padding(bottom = PAGER_INDICATOR_HEIGHT + PAGER_INDICATOR_PADDING)
-                else // No pager, no padding.
-                    Modifier
+            modifier = Modifier.padding(
+                bottom = if (listSize > 1) PAGER_INDICATOR_HEIGHT + PAGER_INDICATOR_PADDING else 0.dp
             )
         ) {
             HorizontalPager(

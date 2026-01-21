@@ -189,10 +189,10 @@ open class ReaderBackendClient(
                 keysNotMatchingReaderIdentityId.add(Pair(id, certifiedKey))
             }
         }
-        keysNotMatchingReaderIdentityId.forEach {
-            secureArea.deleteKey(it.second.alias)
-            certifiedKeysTable.delete(it.first)
-            certifiedKeys!!.remove(it.first)
+        for (entry in keysNotMatchingReaderIdentityId) {
+            secureArea.deleteKey(entry.second.alias)
+            certifiedKeysTable.delete(entry.first)
+            certifiedKeys!!.remove(entry.first)
         }
 
         var numGoodKeys = 0
@@ -211,10 +211,10 @@ open class ReaderBackendClient(
         
         // Only replenish if we are running below 50%...
         if (numGoodKeys > numKeys/2) {
-            toDelete.forEach {
-                secureArea.deleteKey(it.second.alias)
-                certifiedKeysTable.delete(it.first)
-                certifiedKeys!!.remove(it.first)
+            for (entry in toDelete) {
+                secureArea.deleteKey(entry.second.alias)
+                certifiedKeysTable.delete(entry.first)
+                certifiedKeys!!.remove(entry.first)
             }
             return false
         }
@@ -292,10 +292,10 @@ open class ReaderBackendClient(
             certifiedKeys!!.put(id, certifiedKey)
         }
 
-        toDelete.forEach {
-            secureArea.deleteKey(it.second.alias)
-            certifiedKeysTable.delete(it.first)
-            certifiedKeys!!.remove(it.first)
+        for (entry in toDelete) {
+            secureArea.deleteKey(entry.second.alias)
+            certifiedKeysTable.delete(entry.first)
+            certifiedKeys!!.remove(entry.first)
         }
         return false
     }
@@ -355,9 +355,9 @@ open class ReaderBackendClient(
         atTime: Instant = Clock.System.now()
     ) {
         ensureCertifiedKeys()
-        val entry = certifiedKeys!!.entries.find { (key, certifiedKey) ->
+        val entry = certifiedKeys!!.entries.find { (_, certifiedKey) ->
             certifiedKey.alias == keyInfo.alias
-        } ?: throw IllegalArgumentException("No such certified key to mark as used")
+        } ?: throw IllegalArgumentException("No such certified key to mark as used.")
 
         // If this was the last key, replenish immediately. If that fails (e.g. no Internet connectivity)
         // leave the key around but mark that it's already been used
@@ -409,8 +409,8 @@ open class ReaderBackendClient(
         if (version == null) {
             return null
         }
-        getIssuerListObj["entries"]!!.jsonArray.forEach {
-            entries.add(TrustEntry.fromCbor(it.jsonPrimitive.content.fromBase64Url()))
+        for (entry in getIssuerListObj["entries"]!!.jsonArray) {
+            entries.add(TrustEntry.fromCbor(entry.jsonPrimitive.content.fromBase64Url()))
         }
         return Pair(version, entries)
     }
@@ -435,7 +435,7 @@ open class ReaderBackendClient(
             assertion = AssertionNonce(nonce)
         )
 
-        val (status, obj) = communicateWithServer("signIn", buildJsonObject {
+        val (status, _) = communicateWithServer("signIn", buildJsonObject {
             put("registrationId", registrationData.registrationId)
             put("nonce", nonceBase64Url)
             put("deviceAssertion", deviceAssertion.toCbor().toBase64Url())
@@ -458,7 +458,7 @@ open class ReaderBackendClient(
             assertion = AssertionNonce(ByteString(nonce))
         )
 
-        val (status, obj) = communicateWithServer("signOut", buildJsonObject {
+        val (status, _) = communicateWithServer("signOut", buildJsonObject {
             put("registrationId", registrationData.registrationId)
             put("nonce", nonceBase64Url)
             put("deviceAssertion", deviceAssertion.toCbor().toBase64Url())

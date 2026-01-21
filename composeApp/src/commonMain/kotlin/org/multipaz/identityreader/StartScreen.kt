@@ -44,7 +44,6 @@ import io.github.alexzhirkevich.compottie.rememberLottieComposition
 import io.github.alexzhirkevich.compottie.rememberLottiePainter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.io.bytestring.ByteString
 import multipazidentityreader.composeapp.generated.resources.Res
@@ -66,8 +65,8 @@ import org.multipaz.util.Logger
 import org.multipaz.util.UUID
 import org.multipaz.util.fromHex
 import org.multipaz.util.toBase64Url
-import kotlin.time.Duration.Companion.seconds
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableIntStateOf
 import kotlinx.coroutines.isActive
 
 private const val TAG = "StartScreen"
@@ -195,7 +194,7 @@ fun StartScreen(
                             readerBackendClient = readerBackendClient
                         )
                     } catch (_: SignInWithGoogleDismissedException) {
-                        // Do nothing
+                        // Do nothing.
                     } catch (e: Throwable) {
                         showSignInErrorDialog.value = e
                     }
@@ -227,7 +226,7 @@ fun StartScreen(
         return
     }
 
-    var devModeNumTimesPressed by remember { mutableStateOf(0) }
+    var devModeNumTimesPressed by remember { mutableIntStateOf(0) }
     Scaffold(
         topBar = {
             AppBar(
@@ -274,9 +273,9 @@ fun StartScreen(
                 onScanQrClicked = onScanQrClicked,
                 onNfcHandover = onNfcHandover,
                 onOpportunisticSignInToGoogle = {
-                    // Only opportunistically try to sign in the user except
-                    //  - they explicitly signed out
-                    //  - they dismissed the dialog for an opportunistic sign-in attempt
+                    // Only opportunistically try to sign in the user except for:
+                    //  - they explicitly signed out;
+                    //  - they dismissed the dialog for an opportunistic sign-in attempt.
                     if (settingsModel.signedIn.value == null && !settingsModel.explicitlySignedOut.value) {
                         coroutineScope.launch {
                             try {
@@ -286,7 +285,7 @@ fun StartScreen(
                                     readerBackendClient = readerBackendClient
                                 )
                             } catch (e: SignInWithGoogleDismissedException) {
-                                // If the user explicitly dismissed this, don't try to sign them in again
+                                // If the user explicitly dismissed this, don't try to sign them in again.
                                 settingsModel.explicitlySignedOut.value = true
                             } catch (e: Throwable) {
                                 Logger.e(TAG, "Error signing into Google", e)
@@ -415,7 +414,7 @@ private fun StartScreenWithPermissions(
         Spacer(modifier = Modifier.weight(0.2f))
 
         if (reader == null) {
-            // This is for phones that don't support NFC scanning
+            // This is for phones that don't support NFC scanning.
             Text(
                 text = "Scan QR code from Wallet",
                 style = MaterialTheme.typography.titleLarge,
@@ -431,14 +430,14 @@ private fun StartScreenWithPermissions(
                 modifier = Modifier.size(200.dp)
             )
             if (!reader.dialogAlwaysShown) {
-                // This is for phones that support NFC scanning w/o dialog (Android)
+                // This is for phones that support NFC scanning w/o dialog (Android).
                 Text(
                     text = "Hold to Wallet",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
             } else {
-                // This is for phones that requires a dialog for NFC scanning (iOS)
+                // This is for phones that requires a dialog for NFC scanning (iOS).
                 Text(
                     text = "Scan NFC or QR from Wallet",
                     style = MaterialTheme.typography.titleLarge,
