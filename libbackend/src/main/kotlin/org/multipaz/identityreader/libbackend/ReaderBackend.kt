@@ -335,7 +335,7 @@ open class ReaderBackend(
             buildJsonObject {
                 putJsonArray("readerCertifications") {
                     for (readerCertChain in readerCertifications) {
-                        add(readerCertChain.toX5c())
+                        add(readerCertChain.toX5c(excludeRoot = false))
                     }
                 }
             }

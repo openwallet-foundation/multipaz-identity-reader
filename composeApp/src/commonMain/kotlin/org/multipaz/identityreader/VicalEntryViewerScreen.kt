@@ -24,38 +24,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.multipaz.compose.certificateviewer.X509CertViewer
+import org.multipaz.compose.trustmanagement.TrustEntryVicalEntryViewer
+import org.multipaz.compose.trustmanagement.TrustManagerModel
 import org.multipaz.mdoc.vical.SignedVical
 import org.multipaz.mdoc.vical.VicalCertificateInfo
 import org.multipaz.trustmanagement.TrustEntryVical
-import org.multipaz.trustmanagement.TrustManagerLocal
+import org.multipaz.trustmanagement.TrustManager
 
 @Composable
 fun VicalEntryViewerScreen(
-    builtInTrustManager: TrustManagerLocal,
-    userTrustManager: TrustManagerLocal,
-    trustManagerId: String,
-    entryIndex: Int,
-    certificateIndex: Int,
+    trustManagerModel: TrustManagerModel,
+    vicalTrustEntryId: String,
+    certNum: Int,
     onBackPressed: () -> Unit,
 ) {
-    val coroutineScope = rememberCoroutineScope()
-    val certificateInfo = remember { mutableStateOf<VicalCertificateInfo?>(null) }
-
-    LaunchedEffect(Unit) {
-        coroutineScope.launch {
-            val trustManager = when (trustManagerId) {
-                TRUST_MANAGER_ID_BUILT_IN -> builtInTrustManager
-                TRUST_MANAGER_ID_USER -> userTrustManager
-                else -> throw IllegalArgumentException()
-            }
-            val te = trustManager.getEntries()[entryIndex] as TrustEntryVical
-            val signedVal = SignedVical.parse(
-                encodedSignedVical = te.encodedSignedVical.toByteArray(),
-                disableSignatureVerification = true
-            )
-            certificateInfo.value = signedVal.vical.certificateInfos[certificateIndex]
-        }
-    }
+    val scrollState = rememberScrollState()
 
     Scaffold(
         topBar = {
@@ -69,45 +52,16 @@ fun VicalEntryViewerScreen(
             modifier = Modifier.fillMaxSize().padding(innerPadding),
             color = MaterialTheme.colorScheme.background
         ) {
-            certificateInfo.value?.let { ci ->
-
-                val scrollState = rememberScrollState()
-                Column(
-                    modifier = Modifier
-                        .verticalScroll(scrollState)
-                        .fillMaxSize()
-                        .padding(16.dp),
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        ci.RenderIconWithFallback(size = 160.dp)
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            text = ci.displayNameWithFallback,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    val entries = mutableListOf<@Composable () -> Unit>()
-                    entries.add {
-                        EntryItem("Document types", ci.docTypes.joinToString("\n"))
-                    }
-                    EntryList(
-                        title = "VICAL entry",
-                        entries = entries
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    X509CertViewer(certificate = ci.certificate)
-                }
+            Column(
+                modifier = Modifier
+                    .verticalScroll(scrollState)
+                    .fillMaxSize()
+            ) {
+                TrustEntryVicalEntryViewer(
+                    trustManagerModel = trustManagerModel,
+                    vicalTrustEntryId = vicalTrustEntryId,
+                    certNum = certNum
+                )
             }
         }
     }

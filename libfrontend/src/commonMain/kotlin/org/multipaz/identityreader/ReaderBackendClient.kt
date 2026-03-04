@@ -237,6 +237,7 @@ open class ReaderBackendClient(
             keysToCertify.add(secureArea.createKey(null, CreateKeySettings()))
         }
 
+        val keyInfoPublicKeyJwks = keysToCertify.map { it.publicKey.toJwk() }
         val (certifyStatus, certifyRespObj) = communicateWithServer("certifyKeys", buildJsonObject {
             put("registrationId", registrationData.registrationId)
             put("nonce", nonceBase64Url)
@@ -245,9 +246,7 @@ open class ReaderBackendClient(
                 put("readerIdentity", it)
             }
             putJsonArray("keys") {
-                for (keyInfo in keysToCertify) {
-                    add(keyInfo.publicKey.toJwk())
-                }
+                for (jwk in keyInfoPublicKeyJwks) { add(jwk) }
             }
         })
         if (certifyStatus == HttpStatusCode.Forbidden) {

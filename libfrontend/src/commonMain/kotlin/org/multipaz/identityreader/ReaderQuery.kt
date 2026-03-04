@@ -10,7 +10,7 @@ import org.multipaz.mdoc.engagement.DeviceEngagement
 import org.multipaz.mdoc.request.DeviceRequestInfo
 import org.multipaz.mdoc.request.DocumentSet
 import org.multipaz.mdoc.request.UseCase
-import org.multipaz.mdoc.request.buildDeviceRequestSuspend
+import org.multipaz.mdoc.request.buildDeviceRequest
 import org.multipaz.util.Logger
 
 private const val TAG = "ReaderQuery"
@@ -64,7 +64,6 @@ enum class ReaderQuery(
                     Pair(
                         AsymmetricKey.X509CertifiedSecureAreaBased(
                             certChain = keyCertification,
-                            alias = keyInfo.alias,
                             secureArea = keyInfo.let { readerBackendClient.secureArea },
                             keyInfo = readerBackendClient.secureArea.getKeyInfo(keyInfo.alias)
                         ),
@@ -80,7 +79,6 @@ enum class ReaderQuery(
                         Pair(
                             AsymmetricKey.X509CertifiedSecureAreaBased(
                                 certChain = keyCertification,
-                                alias = keyInfo.alias,
                                 secureArea = keyInfo.let { readerBackendClient.secureArea },
                                 keyInfo = readerBackendClient.secureArea.getKeyInfo(keyInfo.alias)
                             ),
@@ -190,7 +188,7 @@ suspend fun generateEncodedDeviceRequest(
     }
     val photoIdDocType = PhotoID.PHOTO_ID_DOCTYPE
 
-    val deviceRequestInfo = if (deviceEngagement.capabilities.get(Capability.EXTENDED_REQUEST_SUPPORT)?.asBoolean == true) {
+    val deviceRequestInfo = if (deviceEngagement.capabilities[Capability.EXTENDED_REQUEST_SUPPORT]?.asBoolean == true) {
         DeviceRequestInfo(
             useCases = listOf(
                 UseCase(
@@ -205,7 +203,7 @@ suspend fun generateEncodedDeviceRequest(
         )
     } else { null }
 
-    val deviceRequest = buildDeviceRequestSuspend(
+    val deviceRequest = buildDeviceRequest(
         sessionTranscript = Cbor.decode(encodedSessionTranscript),
         deviceRequestInfo = deviceRequestInfo
     ) {
@@ -216,7 +214,7 @@ suspend fun generateEncodedDeviceRequest(
                 docRequestInfo = null,
                 readerKey = readerKey
             )
-            if (deviceEngagement.capabilities.get(Capability.EXTENDED_REQUEST_SUPPORT)?.asBoolean == true) {
+            if (deviceEngagement.capabilities[Capability.EXTENDED_REQUEST_SUPPORT]?.asBoolean == true) {
                 addDocRequest(
                     docType = photoIdDocType,
                     nameSpaces = photoIdItemsToRequest,
@@ -230,7 +228,7 @@ suspend fun generateEncodedDeviceRequest(
                 nameSpaces = mdlItemsToRequest,
                 docRequestInfo = null
             )
-            if (deviceEngagement.capabilities.get(Capability.EXTENDED_REQUEST_SUPPORT)?.asBoolean == true) {
+            if (deviceEngagement.capabilities[Capability.EXTENDED_REQUEST_SUPPORT]?.asBoolean == true) {
                 addDocRequest(
                     docType = photoIdDocType,
                     nameSpaces = photoIdItemsToRequest,

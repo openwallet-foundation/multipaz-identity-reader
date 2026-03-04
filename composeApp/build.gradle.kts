@@ -109,6 +109,9 @@ kotlin {
                 implementation(libs.compottie)
                 implementation(libs.semver)
                 implementation(libs.bundles.nav3)
+                implementation(libs.coil.core)
+                implementation(libs.coil.compose.core)
+                implementation(libs.coil.ktor3)
             }
         }
         commonTest.dependencies {

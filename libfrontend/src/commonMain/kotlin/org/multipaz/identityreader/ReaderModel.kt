@@ -138,7 +138,7 @@ class ReaderModel {
         mdocTransportOptions = options
     }
 
-    fun setConnectionEndpoint(
+    suspend fun setConnectionEndpoint(
         encodedDeviceEngagement: ByteString,
         handover: DataItem,
         existingTransport: MdocTransport? = null

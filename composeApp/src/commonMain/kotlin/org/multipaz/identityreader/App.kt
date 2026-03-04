@@ -16,6 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
+import coil3.ImageLoader
+import coil3.compose.LocalPlatformContext
+import coil3.network.ktor3.KtorNetworkFetcherFactory
+import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -26,15 +30,16 @@ import kotlinx.io.bytestring.ByteString
 import org.multipaz.cbor.Cbor
 import org.multipaz.cbor.Simple
 import org.multipaz.compose.prompt.PromptDialogs
+import org.multipaz.compose.trustmanagement.TrustManagerModel
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.documenttype.knowntypes.DrivingLicense
 import org.multipaz.documenttype.knowntypes.PhotoID
 import org.multipaz.mdoc.transport.MdocTransportOptions
 import org.multipaz.trustmanagement.CompositeTrustManager
+import org.multipaz.trustmanagement.TrustEntryRical
 import org.multipaz.trustmanagement.TrustEntryVical
 import org.multipaz.trustmanagement.TrustEntryX509Cert
 import org.multipaz.trustmanagement.TrustManager
-import org.multipaz.trustmanagement.TrustManagerLocal
 import org.multipaz.util.Logger
 import org.multipaz.util.Platform
 import org.multipaz.util.fromBase64Url
@@ -65,9 +70,11 @@ class App(
     private var startDestination: Destination? = null
     private val readerModel = ReaderModel()
     private lateinit var documentTypeRepository: DocumentTypeRepository
-    private lateinit var builtInTrustManager: TrustManagerLocal
-    private lateinit var userTrustManager: TrustManagerLocal
-    private lateinit var compositeTrustManager: TrustManager
+    private lateinit var builtInTrustManager: TrustManager
+    private lateinit var builtInTrustManagerModel: TrustManagerModel
+    private lateinit var userTrustManager: TrustManager
+    private lateinit var userTrustManagerModel: TrustManagerModel
+    private lateinit var compositeTrustManager: CompositeTrustManager
     private lateinit var settingsModel: SettingsModel
     private lateinit var readerBackendClient: ReaderBackendClient
 
@@ -114,15 +121,17 @@ class App(
             documentTypeRepository.addDocumentType(PhotoID.getDocumentType())
             // Note: builtInTrustManager will be populated at app startup, see updateBuiltInIssuers()
             //   and its call-sites
-            builtInTrustManager = TrustManagerLocal(
+            builtInTrustManager = TrustManager(
                 storage = Platform.storage,
-                identifier = "builtInTrustManager",
+                identifier = TRUST_MANAGER_ID_BUILT_IN,
             )
-            userTrustManager = TrustManagerLocal(
+            userTrustManager = TrustManager(
                 storage = Platform.storage,
-                identifier = "userTrustManager",
+                identifier = TRUST_MANAGER_ID_USER,
             )
             compositeTrustManager = CompositeTrustManager(listOf(builtInTrustManager, userTrustManager))
+            builtInTrustManagerModel = TrustManagerModel.create(builtInTrustManager)
+            userTrustManagerModel = TrustManagerModel.create(userTrustManager)
 
             readerBackendClient = ReaderBackendClient(
                 // Use the deployed backend by default.. replace with http://127.0.0.1:8020 or similar
@@ -200,6 +209,12 @@ class App(
                                 metadata = it.metadata
                             )
                         }
+                        is TrustEntryRical -> {
+                            builtInTrustManager.addRical(
+                                encodedSignedRical = it.encodedSignedRical,
+                                metadata = it.metadata
+                            )
+                        }
                     }
                 }
                 settingsModel.builtInIssuersVersion.value = version
@@ -257,6 +272,18 @@ class App(
 
         val selectedQueryNameState = settingsModel.selectedQueryName.collectAsState()
         val devModeState = settingsModel.devMode.collectAsState()
+
+        val context = LocalPlatformContext.current
+        val imageLoader = remember {
+            val engineFactory = getPlatformUtils().httpClientEngineFactory
+            val httpClient = HttpClient(engineFactory.create()) {
+            }
+            ImageLoader.Builder(context)
+                .components {
+                    add(KtorNetworkFetcherFactory(httpClient))
+                }
+                .build()
+        }
 
         val entryProvider = entryProvider<NavKey> {
             entry<StartDestination> {
@@ -395,15 +422,16 @@ class App(
             }
             entry<TrustedIssuersDestination> {
                 TrustedIssuersScreen(
-                    builtInTrustManager = builtInTrustManager,
-                    userTrustManager = userTrustManager,
+                    builtInTrustManagerModel = builtInTrustManagerModel,
+                    userTrustManagerModel = userTrustManagerModel,
                     settingsModel = settingsModel,
+                    imageLoader = imageLoader,
                     onBackPressed = { navigator.goBack() },
-                    onTrustEntryClicked = { trustManagerId, entryIndex, justImported ->
+                    onTrustEntryClicked = { trustManagerId, trustEntryId, justImported ->
                         navigator.navigate(
                             TrustEntryViewerDestination(
                                 trustManagerId = trustManagerId,
-                                entryIndex = entryIndex,
+                                trustEntryId = trustEntryId,
                                 justImported = justImported
                             )
                         )
@@ -422,56 +450,70 @@ class App(
                 )
             }
             entry<TrustEntryViewerDestination> { key ->
+                val (trustManagerModel, canEditOrDelete) = if (key.trustManagerId == TRUST_MANAGER_ID_USER) {
+                    Pair(userTrustManagerModel, true)
+                } else {
+                    Pair(builtInTrustManagerModel, false)
+                }
                 TrustEntryViewerScreen(
-                    builtInTrustManager = builtInTrustManager,
-                    userTrustManager = userTrustManager,
-                    trustManagerId = key.trustManagerId,
-                    entryIndex = key.entryIndex,
+                    trustManagerModel = trustManagerModel,
+                    trustEntryId = key.trustEntryId,
+                    canEditOrDelete = canEditOrDelete,
                     justImported = key.justImported,
-                    onBackPressed = { navigator.goBack() },
-                    onEditPressed = { entryIndex ->
+                    imageLoader = imageLoader,
+                    onBack = { navigator.goBack() },
+                    onEdit = {
                         navigator.navigate(
-                            TrustEntryEditorDestination(entryIndex)
+                            TrustEntryEditorDestination(key.trustManagerId, key.trustEntryId)
                         )
                     },
-                    onShowVicalEntry = { trustManagerId, entryIndex, vicalCertNum ->
+                    onViewVicalEntry = { vicalCertNum ->
                         navigator.navigate(
                             VicalEntryViewerDestination(
-                                trustManagerId = trustManagerId,
-                                entryIndex = entryIndex,
+                                trustManagerId = key.trustManagerId,
+                                trustEntryId = key.trustEntryId,
                                 certificateIndex = vicalCertNum
                             )
                         )
                     },
-                    onShowCertificate = { certificate ->
+                    onViewCertificate = { certificate ->
                         val certificateDataBase64 = Cbor.encode(certificate.toDataItem()).toBase64Url()
                         navigator.navigate(
                             CertificateViewerDestination(certificateDataBase64)
                         )
                     },
-                    onShowCertificateChain = { certificateChain ->
+                    onViewCertificateChain = { certificateChain ->
                         val certificateDataBase64 = Cbor.encode(certificateChain.toDataItem()).toBase64Url()
                         navigator.navigate(
                             CertificateViewerDestination(certificateDataBase64)
                         )
-                    },
+                    }
                 )
             }
             entry<TrustEntryEditorDestination> { key ->
+                val (trustManagerModel, canEditOrDelete) = if (key.trustManagerId == TRUST_MANAGER_ID_USER) {
+                    Pair(userTrustManagerModel, true)
+                } else {
+                    Pair(builtInTrustManagerModel, false)
+                }
                 TrustEntryEditorScreen(
-                    userTrustManager = userTrustManager,
-                    entryIndex = key.entryIndex,
-                    onBackPressed = { navigator.goBack() },
+                    trustManagerModel = trustManagerModel,
+                    trustEntryId = key.trustEntryId,
+                    imageLoader = imageLoader,
+                    onBack = { navigator.goBack() },
                 )
             }
             entry<VicalEntryViewerDestination> { key ->
+                val (trustManagerModel, canEditOrDelete) = if (key.trustManagerId == TRUST_MANAGER_ID_USER) {
+                    Pair(userTrustManagerModel, true)
+                } else {
+                    Pair(builtInTrustManagerModel, false)
+                }
                 VicalEntryViewerScreen(
-                    builtInTrustManager = builtInTrustManager,
-                    userTrustManager = userTrustManager,
-                    trustManagerId = key.trustManagerId,
-                    entryIndex = key.entryIndex,
-                    certificateIndex = key.certificateIndex,
-                    onBackPressed = { navigator.goBack() },
+                    trustManagerModel = trustManagerModel,
+                    vicalTrustEntryId = key.trustEntryId,
+                    certNum = key.certificateIndex,
+                    onBackPressed = { navigator.goBack() }
                 )
             }
         }

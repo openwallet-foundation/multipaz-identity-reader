@@ -24,17 +24,18 @@ data class CertificateViewerDestination(
 
 data class TrustEntryViewerDestination(
     val trustManagerId: String,
-    val entryIndex: Int,
+    val trustEntryId: String,
     val justImported: Boolean,
 ): Destination
 
 data class TrustEntryEditorDestination(
-    val entryIndex: Int,
+    val trustManagerId: String,
+    val trustEntryId: String,
 ): Destination
 
 data class VicalEntryViewerDestination(
     val trustManagerId: String,
-    val entryIndex: Int,
+    val trustEntryId: String,
     val certificateIndex: Int,
 ): Destination
 
@@ -44,5 +45,5 @@ data object DeveloperSettingsDestination: Destination
 
 data object ReaderIdentityDestination: Destination
 
-const val TRUST_MANAGER_ID_BUILT_IN = "built-in"
+const val TRUST_MANAGER_ID_BUILT_IN = "builtIn"
 const val TRUST_MANAGER_ID_USER = "user"

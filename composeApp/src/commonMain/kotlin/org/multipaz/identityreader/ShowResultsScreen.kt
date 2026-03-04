@@ -54,7 +54,7 @@ import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.documenttype.knowntypes.DrivingLicense
 import org.multipaz.documenttype.knowntypes.PhotoID
 import org.multipaz.mdoc.response.DeviceResponse
-import org.multipaz.trustmanagement.TrustManager
+import org.multipaz.trustmanagement.TrustManagerInterface
 import org.multipaz.trustmanagement.TrustPoint
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -64,7 +64,7 @@ fun ShowResultsScreen(
     readerQuery: ReaderQuery,
     readerModel: ReaderModel,
     documentTypeRepository: DocumentTypeRepository,
-    issuerTrustManager: TrustManager,
+    issuerTrustManager: TrustManagerInterface,
     onBackPressed: () -> Unit,
     onShowDetailedResults: (() -> Unit)?
 ) {
@@ -155,7 +155,7 @@ private suspend fun parseResponse(
     now: Instant,
     readerModel: ReaderModel,
     documentTypeRepository: DocumentTypeRepository,
-    issuerTrustManager: TrustManager
+    issuerTrustManager: TrustManagerInterface
 ): List<ParsedMdocDocument> {
     val deviceResponse = DeviceResponse.fromDataItem(Cbor.decode(
         readerModel.result!!.encodedDeviceResponse!!.toByteArray()))

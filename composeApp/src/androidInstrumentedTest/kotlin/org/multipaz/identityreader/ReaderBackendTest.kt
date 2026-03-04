@@ -2,6 +2,7 @@ package org.multipaz.identityreader
 
 import android.content.pm.PackageManager
 import androidx.test.platform.app.InstrumentationRegistry
+import io.ktor.client.engine.android.Android
 import io.ktor.client.engine.cio.CIO
 import io.ktor.http.HttpStatusCode
 import junit.framework.TestCase.assertTrue
@@ -15,8 +16,10 @@ import org.multipaz.asn1.ASN1Integer
 import org.multipaz.context.applicationContext
 import org.multipaz.context.initializeApplication
 import org.multipaz.crypto.Algorithm
+import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.crypto.Crypto
 import org.multipaz.crypto.EcCurve
+import org.multipaz.crypto.EcPrivateKey
 import org.multipaz.crypto.X500Name
 import org.multipaz.crypto.X509Cert
 import org.multipaz.crypto.X509CertChain
@@ -43,81 +46,123 @@ import kotlin.time.Instant
 import org.multipaz.identityreader.libbackend.ReaderIdentity as BackendReaderIdentity
 
 class ReaderBackendTest {
-    private class LoopbackReaderBackendClient(
+    private class LoopbackReaderBackendClient private constructor(
         clientStorage: Storage,
         serverStorage: Storage,
         secureArea: SecureArea,
         numKeys: Int,
-        androidAppSignatureCertificateDigests: List<ByteString> = emptyList(),
-        issueTrustListVersion: Long = Long.MIN_VALUE,
-        issuerTrustList: List<TrustEntry> = emptyList(),
-        getReaderIdentitiesForUser: (user: SignedInGoogleUser) -> List<BackendReaderIdentity> = { emptyList() }
+        private val androidAppSignatureCertificateDigests: List<ByteString> = emptyList(),
+        private val issuerTrustListVersion: Long = Long.MIN_VALUE,
+        private val issuerTrustList: List<TrustEntry> = emptyList(),
+        private val getReaderIdentitiesForUser: (user: SignedInGoogleUser) -> List<BackendReaderIdentity> = { emptyList() }
     ) : ReaderBackendClient(
         readerBackendUrl = "not-used",
         storage = clientStorage,
-        httpClientEngineFactory = CIO,
+        httpClientEngineFactory = Android,
         secureArea = secureArea,
         numKeys = numKeys
     ) {
-        private val readerRootKeyForUntrustedDevices = Crypto.createEcPrivateKey(EcCurve.P384)
-        val readerRootCertChainForUntrustedDevices = X509CertChain(
-            listOf(
-                MdocUtil.generateReaderRootCertificate(
-                    readerRootKey = readerRootKeyForUntrustedDevices,
-                    subject = X500Name.fromName("CN=TEST Reader Root (Untrusted Devices)"),
-                    serial = ASN1Integer.fromRandom(numBits = 128),
-                    validFrom = Instant.parse("2024-07-01T06:00:00Z"),
-                    validUntil = Instant.parse("2030-07-01T06:00:00Z"),
-                    crlUrl = "https://www.example.com/crl"
+        companion object {
+            suspend fun create(
+                clientStorage: Storage,
+                serverStorage: Storage,
+                secureArea: SecureArea,
+                numKeys: Int,
+                androidAppSignatureCertificateDigests: List<ByteString> = emptyList(),
+                issuerTrustListVersion: Long = Long.MIN_VALUE,
+                issuerTrustList: List<TrustEntry> = emptyList(),
+                getReaderIdentitiesForUser: (user: SignedInGoogleUser) -> List<BackendReaderIdentity> = { emptyList() }
+            ) : LoopbackReaderBackendClient {
+                val client = LoopbackReaderBackendClient(
+                    clientStorage = clientStorage,
+                    serverStorage = serverStorage,
+                    secureArea = secureArea,
+                    numKeys = numKeys,
+                    androidAppSignatureCertificateDigests = androidAppSignatureCertificateDigests,
+                    issuerTrustListVersion = issuerTrustListVersion,
+                    issuerTrustList = issuerTrustList,
+                    getReaderIdentitiesForUser = getReaderIdentitiesForUser
                 )
-            )
-        )
-
-        private val readerRootKey = Crypto.createEcPrivateKey(EcCurve.P384)
-        val readerRootCertChain = X509CertChain(
-            listOf(
-                MdocUtil.generateReaderRootCertificate(
-                    readerRootKey = readerRootKey,
-                    subject = X500Name.fromName("CN=TEST Reader Root"),
-                    serial = ASN1Integer.fromRandom(numBits = 128),
-                    validFrom = Instant.parse("2024-07-01T06:00:00Z"),
-                    validUntil = Instant.parse("2030-07-01T06:00:00Z"),
-                    crlUrl = "https://www.example.com/crl"
-                )
-            )
-        )
-
+                client.initialize()
+                return client
+            }
+            
+        }
         private var serverStorage_ = serverStorage
 
         fun setServerStorage(serverStorage: EphemeralStorage) {
             serverStorage_ = serverStorage
         }
 
-        private val backend = ReaderBackend(
-            readerRootKeyForUntrustedDevices = readerRootKeyForUntrustedDevices,
-            readerRootCertChainForUntrustedDevices = readerRootCertChainForUntrustedDevices,
-            readerRootKey = readerRootKey,
-            readerRootCertChain = readerRootCertChain,
-            readerCertDuration = DateTimePeriod(days = 30),
-            iosReleaseBuild = false,
-            iosAppIdentifier = null,
-            androidGmsAttestation = false,
-            androidVerifiedBootGreen = false,
-            androidAppSignatureCertificateDigests = androidAppSignatureCertificateDigests,
-            issuerTrustListVersion = issueTrustListVersion,
-            issuerTrustList = issuerTrustList,
-            googleIdTokenVerifier = { idToken ->
-                Pair(idToken, SignedInGoogleUser(
-                    id = "1234567890",
-                    email = "user@example.org",
-                    displayName = "Example User",
-                    profilePictureUri = null
-                ))
-            },
-            getReaderIdentitiesForUser = getReaderIdentitiesForUser,
-            getStorageTable = { spec -> serverStorage_.getTable(spec) },
-            getCurrentTime = { currentTime }
-        )
+        private lateinit var readerRootKeyForUntrustedDevices: EcPrivateKey
+        lateinit var readerRootCertChainForUntrustedDevices: X509CertChain
+
+        private lateinit var readerRootKey: EcPrivateKey
+        lateinit var readerRootCertChain: X509CertChain
+        
+        private lateinit var backend: ReaderBackend
+        
+        private suspend fun initialize() {
+            readerRootKeyForUntrustedDevices = Crypto.createEcPrivateKey(EcCurve.P384)
+            readerRootCertChainForUntrustedDevices = X509CertChain(
+                listOf(
+                    MdocUtil.generateReaderRootCertificate(
+                        readerRootKey = AsymmetricKey.AnonymousExplicit(
+                            privateKey = readerRootKeyForUntrustedDevices,
+                        ),
+                        subject = X500Name.fromName("CN=TEST Reader Root (Untrusted Devices)"),
+                        serial = ASN1Integer.fromRandom(numBits = 128),
+                        validFrom = Instant.parse("2024-07-01T06:00:00Z"),
+                        validUntil = Instant.parse("2030-07-01T06:00:00Z"),
+                        crlUrl = "https://www.example.com/crl"
+                    )
+                )
+            )
+
+            readerRootKey = Crypto.createEcPrivateKey(EcCurve.P384)
+            readerRootCertChain = X509CertChain(
+                listOf(
+                    MdocUtil.generateReaderRootCertificate(
+                        readerRootKey = AsymmetricKey.AnonymousExplicit(
+                            privateKey = readerRootKey
+                        ),
+                        subject = X500Name.fromName("CN=TEST Reader Root"),
+                        serial = ASN1Integer.fromRandom(numBits = 128),
+                        validFrom = Instant.parse("2024-07-01T06:00:00Z"),
+                        validUntil = Instant.parse("2030-07-01T06:00:00Z"),
+                        crlUrl = "https://www.example.com/crl"
+                    )
+                )
+            )
+
+            backend = ReaderBackend(
+                readerRootKeyForUntrustedDevices = readerRootKeyForUntrustedDevices,
+                readerRootCertChainForUntrustedDevices = readerRootCertChainForUntrustedDevices,
+                readerRootKey = readerRootKey,
+                readerRootCertChain = readerRootCertChain,
+                readerCertDuration = DateTimePeriod(days = 30),
+                iosReleaseBuild = false,
+                iosAppIdentifier = null,
+                androidGmsAttestation = false,
+                androidVerifiedBootGreen = false,
+                androidAppSignatureCertificateDigests = androidAppSignatureCertificateDigests,
+                issuerTrustListVersion = issuerTrustListVersion,
+                issuerTrustList = issuerTrustList,
+                googleIdTokenVerifier = { idToken ->
+                    Pair(
+                        idToken, SignedInGoogleUser(
+                            id = "1234567890",
+                            email = "user@example.org",
+                            displayName = "Example User",
+                            profilePictureUri = null
+                        )
+                    )
+                },
+                getReaderIdentitiesForUser = getReaderIdentitiesForUser,
+                getStorageTable = { spec -> serverStorage_.getTable(spec) },
+                getCurrentTime = { currentTime }
+            )
+        }
 
         var numRpc = 0
         var currentTime = Instant.parse("2024-08-01T00:00:00Z")
@@ -179,7 +224,7 @@ class ReaderBackendTest {
     ) = runTest {
         val clientStorage = EphemeralStorage()
         val serverStorage = EphemeralStorage()
-        val client = LoopbackReaderBackendClient(
+        val client = LoopbackReaderBackendClient.create(
             clientStorage = clientStorage,
             serverStorage = serverStorage,
             secureArea = AndroidKeystoreSecureArea.create(clientStorage),
@@ -215,7 +260,7 @@ class ReaderBackendTest {
 
         // Create another client using the same storage - simulating an app restart.. next getKey()
         // call should not cause RPC
-        val client2 = LoopbackReaderBackendClient(
+        val client2 = LoopbackReaderBackendClient.create(
             clientStorage = clientStorage,
             serverStorage = serverStorage,
             secureArea = AndroidKeystoreSecureArea.create(clientStorage),
@@ -234,7 +279,7 @@ class ReaderBackendTest {
     fun testReplenish() = runTest {
         val clientStorage = EphemeralStorage()
         val serverStorage = EphemeralStorage()
-        val client = LoopbackReaderBackendClient(
+        val client = LoopbackReaderBackendClient.create(
             clientStorage = clientStorage,
             serverStorage = serverStorage,
             secureArea = AndroidKeystoreSecureArea.create(clientStorage),
@@ -281,7 +326,7 @@ class ReaderBackendTest {
     fun testExpiration() = runTest {
         val clientStorage = EphemeralStorage()
         val serverStorage = EphemeralStorage()
-        val client = LoopbackReaderBackendClient(
+        val client = LoopbackReaderBackendClient.create(
             clientStorage = clientStorage,
             serverStorage = serverStorage,
             secureArea = AndroidKeystoreSecureArea.create(clientStorage),
@@ -318,7 +363,7 @@ class ReaderBackendTest {
     fun testNoInternetConnectivity() = runTest {
         val clientStorage = EphemeralStorage()
         val serverStorage = EphemeralStorage()
-        val client = LoopbackReaderBackendClient(
+        val client = LoopbackReaderBackendClient.create(
             clientStorage = clientStorage,
             serverStorage = serverStorage,
             secureArea = AndroidKeystoreSecureArea.create(clientStorage),
@@ -376,7 +421,7 @@ class ReaderBackendTest {
     fun testServerLostRegistration() = runTest {
         val clientStorage = EphemeralStorage()
         val serverStorage = EphemeralStorage()
-        val client = LoopbackReaderBackendClient(
+        val client = LoopbackReaderBackendClient.create(
             clientStorage = clientStorage,
             serverStorage = serverStorage,
             secureArea = AndroidKeystoreSecureArea.create(clientStorage),
@@ -411,7 +456,7 @@ class ReaderBackendTest {
         val issuerTrustList1 = listOf(
             TrustEntryX509Cert(
                 metadata = TrustMetadata(displayName = "foo", displayIcon = ByteString(1, 2, 3)),
-                certificate = X509Cert(byteArrayOf(10, 11, 12))
+                certificate = X509Cert(ByteString(10, 11, 12))
             ),
             TrustEntryVical(
                 metadata = TrustMetadata(displayName = "bar", displayIcon = ByteString(4, 5, 6)),
@@ -421,12 +466,12 @@ class ReaderBackendTest {
 
         val clientStorage = EphemeralStorage()
         val serverStorage = EphemeralStorage()
-        val client = LoopbackReaderBackendClient(
+        val client = LoopbackReaderBackendClient.create(
             clientStorage = clientStorage,
             serverStorage = serverStorage,
             secureArea = AndroidKeystoreSecureArea.create(clientStorage),
             numKeys = 10,
-            issueTrustListVersion = 42L,
+            issuerTrustListVersion = 42L,
             issuerTrustList = issuerTrustList1
         )
 
@@ -450,7 +495,7 @@ class ReaderBackendTest {
     fun testSignIn() = runTest {
         val clientStorage = EphemeralStorage()
         val serverStorage = EphemeralStorage()
-        val client = LoopbackReaderBackendClient(
+        val client = LoopbackReaderBackendClient.create(
             clientStorage = clientStorage,
             serverStorage = serverStorage,
             secureArea = AndroidKeystoreSecureArea.create(clientStorage),
@@ -502,7 +547,7 @@ class ReaderBackendTest {
 
         val fooPrivateKey = Crypto.createEcPrivateKey(curve = EcCurve.P384)
         val fooCertChain = X509CertChain(certificates = listOf(MdocUtil.generateReaderRootCertificate(
-            readerRootKey = fooPrivateKey,
+            readerRootKey = AsymmetricKey.AnonymousExplicit(privateKey = fooPrivateKey),
             subject = X500Name.fromName("CN=Foo Reader CA"),
             serial = ASN1Integer.fromRandom(numBits = 128),
             validFrom = Instant.parse("2024-07-01T06:00:00Z"),
@@ -512,7 +557,7 @@ class ReaderBackendTest {
 
         val barPrivateKey = Crypto.createEcPrivateKey(curve = EcCurve.P384)
         val barCertChain = X509CertChain(certificates = listOf(MdocUtil.generateReaderRootCertificate(
-            readerRootKey = barPrivateKey,
+            readerRootKey = AsymmetricKey.AnonymousExplicit(privateKey = barPrivateKey),
             subject = X500Name.fromName("CN=Bar Reader CA"),
             serial = ASN1Integer.fromRandom(numBits = 128),
             validFrom = Instant.parse("2024-07-01T06:00:00Z"),
@@ -520,7 +565,7 @@ class ReaderBackendTest {
             crlUrl = "https://www.example.com/crl"
         )))
 
-        val client = LoopbackReaderBackendClient(
+        val client = LoopbackReaderBackendClient.create(
             clientStorage = clientStorage,
             serverStorage = serverStorage,
             secureArea = AndroidKeystoreSecureArea.create(clientStorage),

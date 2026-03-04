@@ -31,7 +31,6 @@ import org.multipaz.cbor.DataItem
 import org.multipaz.cbor.DiagnosticOption
 import org.multipaz.compose.datetime.formattedDateTime
 import org.multipaz.compose.decodeImage
-import org.multipaz.crypto.Algorithm
 import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.crypto.X509CertChain
 import org.multipaz.documenttype.DocumentAttributeType
@@ -40,6 +39,7 @@ import org.multipaz.documenttype.MdocDocumentType
 import org.multipaz.mdoc.devicesigned.DeviceAuth
 import org.multipaz.mdoc.response.DeviceResponse
 import org.multipaz.trustmanagement.TrustManager
+import org.multipaz.trustmanagement.TrustManagerInterface
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -87,7 +87,7 @@ fun ShowDetailedResultsScreen(
     readerQuery: ReaderQuery,
     readerModel: ReaderModel,
     documentTypeRepository: DocumentTypeRepository,
-    issuerTrustManager: TrustManager,
+    issuerTrustManager: TrustManagerInterface,
     onBackPressed: () -> Unit,
     onShowCertificateChain: (certChain: X509CertChain) -> Unit,
 ) {
@@ -202,7 +202,7 @@ private suspend fun parseResponse(
     now: Instant,
     readerModel: ReaderModel,
     documentTypeRepository: DocumentTypeRepository,
-    issuerTrustManager: TrustManager,
+    issuerTrustManager: TrustManagerInterface,
     onShowCertificateChain: (certChain: X509CertChain) -> Unit
 ): VerificationResult {
     val sections = mutableListOf<Section>()
