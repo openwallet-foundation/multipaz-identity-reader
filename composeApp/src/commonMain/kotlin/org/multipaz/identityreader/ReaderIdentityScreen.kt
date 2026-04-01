@@ -46,6 +46,7 @@ import multipazidentityreader.composeapp.generated.resources.app_icon
 import multipazidentityreader.composeapp.generated.resources.reader_identity_title
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import org.multipaz.compose.items.FloatingItemList
 import org.multipaz.compose.pickers.rememberFilePicker
 import org.multipaz.crypto.X509CertChain
 import org.multipaz.prompt.PassphraseEvaluation
@@ -105,9 +106,7 @@ fun ReaderIdentityScreen(
                         require(privateKey.publicKey == certChain.certificates[0].ecPublicKey) {
                             "First certificate is not for the given key"
                         }
-                        require(certChain.validate()) {
-                            "Certificate chain did not validate"
-                        }
+                        certChain.validate()
                         println("first : ${certChain.certificates[0].toPem()}")
                         println("second : ${certChain.certificates[1].toPem()}")
                         // TODO: add a couple of additional checks for example that the leaf certificate
@@ -146,6 +145,23 @@ fun ReaderIdentityScreen(
         )
     }
 
+    LaunchedEffect(Unit) {
+        if (settingsModel.signedIn.value != null) {
+            coroutineScope.launch {
+                try {
+                    availableReaderIdentities.value = readerBackendClient.getReaderIdentities()
+                    println("num Reader Identities = ${availableReaderIdentities.value?.size}")
+                    availableReaderIdentities.value?.forEach {
+                        println(it)
+                    }
+                } catch (e: Throwable) {
+                    Logger.i(TAG, "Error loading identities", e)
+                    availableReaderIdentities.value = emptyList()
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             AppBar(
@@ -175,192 +191,141 @@ the request is from
                     """.trimIndent().replace("\n", " ").trim(),
                 )
 
-                val entries = mutableListOf<@Composable () -> Unit>()
-                entries.add {
-                    Row(
-                        modifier = Modifier.clickable {
-                            settingsModel.readerAuthMethod.value = ReaderAuthMethod.NO_READER_AUTH
-                            settingsModel.customReaderAuthKey.value = null
-                            settingsModel.customReaderAuthCertChain.value = null
-                        },
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.Start),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            modifier = Modifier.size(32.dp),
-                            imageVector = Icons.Outlined.Block,
-                            contentDescription = null
-                        )
-                        EntryItem(
-                            modifier = Modifier.weight(1.0f),
-                            key = "Don't use reader authentication",
-                            valueText = "The request won't be signed and the receiving wallet " +
-                                    "won't know who's asking"
-                        )
-                        Checkbox(
-                            checked = readerAuthMethod.value == ReaderAuthMethod.NO_READER_AUTH,
-                            onCheckedChange = null
-                        )
-                    }
-                }
-                entries.add {
-                    Row(
-                        modifier = Modifier.clickable {
-                            importReaderKeyFilePicker.launch()
-                        },
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.Start),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            modifier = Modifier.size(32.dp),
-                            imageVector = Icons.Outlined.Badge,
-                            contentDescription = null
-                        )
-                        EntryItem(
-                            modifier = Modifier.weight(1.0f),
-                            key = "Use reader certificate from PKCS#12 file",
-                            valueText = "Uses a custom key to sign requests. The same key will be " +
-                                        "used to sign all requests",
-                        )
-                        Checkbox(
-                            checked = readerAuthMethod.value == ReaderAuthMethod.CUSTOM_KEY,
-                            onCheckedChange = null
-                        )
-                    }
-                }
-                entries.add {
-                    Row(
-                        modifier = Modifier.clickable {
-                            settingsModel.readerAuthMethod.value = ReaderAuthMethod.STANDARD_READER_AUTH
-                            settingsModel.customReaderAuthKey.value = null
-                            settingsModel.customReaderAuthCertChain.value = null
-                            // Prime the cache
-                            coroutineScope.launch {
-                                try {
-                                    readerBackendClient.getKey()
-                                } catch (e: Throwable) {
-                                    Logger.w(TAG, "Error priming cache for standard reader auth", e)
-                                }
+                FloatingItemList (
+                    title = "Reader identity",
+                ) {
+                    FloatingItemHeadingTextAndCheckbox(
+                        heading = "Don't use reader authentication",
+                        text = "The request won't be signed and the receiving wallet " +
+                                "won't know who's asking",
+                        enabled = true,
+                        checked = settingsModel.readerAuthMethod.value == ReaderAuthMethod.NO_READER_AUTH,
+                        onCheckedChanged = { newValue ->
+                            if (newValue) {
+                                settingsModel.readerAuthMethod.value = ReaderAuthMethod.NO_READER_AUTH
+                                settingsModel.customReaderAuthKey.value = null
+                                settingsModel.customReaderAuthCertChain.value = null
                             }
                         },
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.Start),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            modifier = Modifier.size(32.dp),
-                            painter = painterResource(Res.drawable.app_icon),
-                            tint = Color.Unspecified,
-                            contentDescription = null
-                        )
-                        EntryItem(
-                            modifier = Modifier.weight(1.0f),
-                            key = "Multipaz Identity Reader",
-                            valueText = "The Multipaz Identity Reader CA will be used to " +
-                                    "certify single-use reader keys",
-                        )
-                        Checkbox(
-                            checked = readerAuthMethod.value == ReaderAuthMethod.STANDARD_READER_AUTH,
-                            onCheckedChange = null
-                        )
-                    }
-                }
-
-                LaunchedEffect(Unit) {
-                    if (settingsModel.signedIn.value != null) {
-                        coroutineScope.launch {
-                            try {
-                                availableReaderIdentities.value = readerBackendClient.getReaderIdentities()
-                                println("num Reader Identities = ${availableReaderIdentities.value?.size}")
-                                availableReaderIdentities.value?.forEach {
-                                    println(it)
-                                }
-                            } catch (e: Throwable) {
-                                Logger.i(TAG, "Error loading identities", e)
-                                availableReaderIdentities.value = emptyList()
-                            }
+                        image = {
+                            Icon(
+                                modifier = Modifier.size(40.dp),
+                                imageVector = Icons.Outlined.Block,
+                                contentDescription = null
+                            )
                         }
-                    }
-                }
-
-                val signedInData = settingsModel.signedIn.collectAsState()
-                signedInData.value?.let {
-                    entries.add {
-                        Row(
-                            modifier = Modifier.clickable {
-                                settingsModel.readerAuthMethod.value = ReaderAuthMethod.STANDARD_READER_AUTH_WITH_GOOGLE_ACCOUNT_DETAILS
+                    )
+                    FloatingItemHeadingTextAndCheckbox(
+                        heading = "Use reader certificate from PKCS#12 file",
+                        text = "Uses a custom key to sign requests. The same key will be " +
+                                "used to sign all requests",
+                        enabled = true,
+                        checked = settingsModel.readerAuthMethod.value == ReaderAuthMethod.CUSTOM_KEY,
+                        onCheckedChanged = { newValue ->
+                            if (newValue) {
+                                importReaderKeyFilePicker.launch()
+                            }
+                        },
+                        image = {
+                            Icon(
+                                modifier = Modifier.size(40.dp),
+                                imageVector = Icons.Outlined.Badge,
+                                contentDescription = null
+                            )
+                        }
+                    )
+                    FloatingItemHeadingTextAndCheckbox(
+                        heading = "Multipaz Identity Reader",
+                        text = "The Multipaz Identity Reader CA will be used to " +
+                                "certify single-use reader keys",
+                        enabled = true,
+                        checked = settingsModel.readerAuthMethod.value == ReaderAuthMethod.STANDARD_READER_AUTH,
+                        onCheckedChanged = { newValue ->
+                            if (newValue) {
+                                settingsModel.readerAuthMethod.value = ReaderAuthMethod.STANDARD_READER_AUTH
                                 settingsModel.customReaderAuthKey.value = null
                                 settingsModel.customReaderAuthCertChain.value = null
                                 // Prime the cache
                                 coroutineScope.launch {
                                     try {
-                                        readerBackendClient.getKey(readerIdentityId = "")
+                                        readerBackendClient.getKey()
                                     } catch (e: Throwable) {
-                                        Logger.w(TAG, "Error priming cache for standard reader auth" +
-                                                " w/ Google Account details", e)
+                                        Logger.w(TAG, "Error priming cache for standard reader auth", e)
+                                    }
+                                }
+                            }
+                        },
+                        image = {
+                            Icon(
+                                modifier = Modifier.size(40.dp),
+                                painter = painterResource(Res.drawable.app_icon),
+                                tint = Color.Unspecified,
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    val signedInData = settingsModel.signedIn.collectAsState()
+                    signedInData.value?.let {
+                        FloatingItemHeadingTextAndCheckbox(
+                            heading = it.id,
+                            text = "Information from your Google Account (id, email, and profile picture) " +
+                                    "will be included in the request",
+                            enabled = true,
+                            checked = settingsModel.readerAuthMethod.value == ReaderAuthMethod.STANDARD_READER_AUTH_WITH_GOOGLE_ACCOUNT_DETAILS,
+                            onCheckedChanged = { newValue ->
+                                if (newValue) {
+                                    settingsModel.readerAuthMethod.value = ReaderAuthMethod.STANDARD_READER_AUTH_WITH_GOOGLE_ACCOUNT_DETAILS
+                                    settingsModel.customReaderAuthKey.value = null
+                                    settingsModel.customReaderAuthCertChain.value = null
+                                    // Prime the cache
+                                    coroutineScope.launch {
+                                        try {
+                                            readerBackendClient.getKey(readerIdentityId = "")
+                                        } catch (e: Throwable) {
+                                            Logger.w(TAG, "Error priming cache for standard reader auth" +
+                                                    " w/ Google Account details", e)
+                                        }
                                     }
                                 }
                             },
-                            horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.Start),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            it.ProfilePicture(
-                                size = 32.dp
-                            )
-                            EntryItem(
-                                modifier = Modifier.weight(1.0f),
-                                key = it.id,
-                                valueText = "Information from your Google Account (id, email, and profile picture) " +
-                                "will be included in the request",
-                            )
-                            Checkbox(
-                                checked = (readerAuthMethod.value ==
-                                        ReaderAuthMethod.STANDARD_READER_AUTH_WITH_GOOGLE_ACCOUNT_DETAILS),
-                                onCheckedChange = null
-                            )
-                        }
+                            image = {
+                                it.ProfilePicture(
+                                    size = 40.dp
+                                )
+                            }
+                        )
                     }
-                }
 
-                availableReaderIdentities.value?.forEach { readerIdentityFromGoogleAccount ->
-                    entries.add {
-                        Row(
-                            modifier = Modifier.clickable {
-                                settingsModel.readerAuthMethod.value = ReaderAuthMethod.IDENTITY_FROM_GOOGLE_ACCOUNT
-                                settingsModel.readerAuthMethodGoogleIdentity.value = readerIdentityFromGoogleAccount
-                                // Prime the cache
-                                coroutineScope.launch {
-                                    try {
-                                        readerBackendClient.getKey(
-                                            readerIdentityId = settingsModel.readerAuthMethodGoogleIdentity.value!!.id)
-                                    } catch (e: Throwable) {
-                                        Logger.w(TAG, "Error priming cache for Google Account reader auth", e)
+                    availableReaderIdentities.value?.forEach { readerIdentityFromGoogleAccount ->
+                        FloatingItemHeadingTextAndCheckbox(
+                            heading = readerIdentityFromGoogleAccount.displayName,
+                            text = "Reader identity from your Google account",
+                            enabled = true,
+                            checked = true,
+                            onCheckedChanged = { newValue ->
+                                if (newValue) {
+                                    settingsModel.readerAuthMethod.value = ReaderAuthMethod.IDENTITY_FROM_GOOGLE_ACCOUNT
+                                    settingsModel.readerAuthMethodGoogleIdentity.value = readerIdentityFromGoogleAccount
+                                    // Prime the cache
+                                    coroutineScope.launch {
+                                        try {
+                                            readerBackendClient.getKey(
+                                                readerIdentityId = settingsModel.readerAuthMethodGoogleIdentity.value!!.id
+                                            )
+                                        } catch (e: Throwable) {
+                                            Logger.w(TAG, "Error priming cache for Google Account reader auth", e)
+                                        }
                                     }
                                 }
                             },
-                            horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.Start),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            readerIdentityFromGoogleAccount.Icon()
-                            EntryItem(
-                                modifier = Modifier.weight(1.0f),
-                                key = readerIdentityFromGoogleAccount.displayName,
-                                valueText = "Reader identity from your Google account",
-                            )
-                            Checkbox(
-                                checked = (
-                                        readerAuthMethod.value == ReaderAuthMethod.IDENTITY_FROM_GOOGLE_ACCOUNT &&
-                                        readerAuthMethodGoogleId.value == readerIdentityFromGoogleAccount
-                                ),
-                                onCheckedChange = null
-                            )
-                        }
+                            image = {
+                                readerIdentityFromGoogleAccount.Icon(size = 40.dp)
+                            }
+                        )
                     }
                 }
 
-                EntryList(
-                    title = "Reader identity",
-                    entries = entries
-                )
 
                 if (readerAuthMethod.value != ReaderAuthMethod.NO_READER_AUTH) {
                     Spacer(modifier = Modifier.height(8.dp))

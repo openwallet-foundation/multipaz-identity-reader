@@ -43,7 +43,7 @@ fun TrustEntryEditorScreen(
     val info = trustManagerModel.trustManagerInfos.value.find {
         it.entry.identifier == trustEntryId
     } ?: return
-    val newMetadata = remember { mutableStateOf<TrustMetadata>(info.entry.metadata) }
+    val newMetadata = remember { mutableStateOf(info.entry.metadata) }
 
     if (showConfirmationBeforeExiting) {
         AlertDialog(
@@ -87,14 +87,14 @@ fun TrustEntryEditorScreen(
                     }
                 ),
                 onBackPressed = {
-                    if (newMetadata != info.entry.metadata) {
+                    if (newMetadata.value != info.entry.metadata) {
                         showConfirmationBeforeExiting = true
                     } else {
                         onBack()
                     }
                 },
                 actions = {
-                    val contentChanged = (newMetadata != info.entry.metadata)
+                    val contentChanged = (newMetadata.value != info.entry.metadata)
                     Button(
                         enabled = contentChanged,
                         onClick = {
@@ -119,7 +119,7 @@ fun TrustEntryEditorScreen(
                     .verticalScroll(scrollState)
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(16.dp),
+                    .padding(8.dp),
             ) {
                 TrustEntryEditor(
                     trustEntryInfo = info,

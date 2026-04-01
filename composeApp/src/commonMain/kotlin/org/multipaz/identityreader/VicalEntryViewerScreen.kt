@@ -56,6 +56,7 @@ fun VicalEntryViewerScreen(
                 modifier = Modifier
                     .verticalScroll(scrollState)
                     .fillMaxSize()
+                    .padding(8.dp),
             ) {
                 TrustEntryVicalEntryViewer(
                     trustManagerModel = trustManagerModel,

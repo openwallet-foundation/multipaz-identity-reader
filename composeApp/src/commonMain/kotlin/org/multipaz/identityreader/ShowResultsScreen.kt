@@ -193,6 +193,7 @@ private suspend fun parseResponse(
                 resultDataElements[dataElement] = MdocClaim(
                     displayName = mdocDataElement?.attribute?.displayName ?: dataElement,
                     attribute = mdocDataElement?.attribute,
+                    docType = document.docType,
                     namespaceName = namespace,
                     dataElementName = dataElement,
                     value = item.dataElementValue

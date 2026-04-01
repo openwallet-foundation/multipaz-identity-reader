@@ -482,7 +482,7 @@ class App(
                             CertificateViewerDestination(certificateDataBase64)
                         )
                     },
-                    onViewCertificateChain = { certificateChain ->
+                    onViewSignerCertificateChain = { certificateChain ->
                         val certificateDataBase64 = Cbor.encode(certificateChain.toDataItem()).toBase64Url()
                         navigator.navigate(
                             CertificateViewerDestination(certificateDataBase64)

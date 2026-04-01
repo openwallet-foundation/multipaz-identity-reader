@@ -46,13 +46,13 @@ import kotlinx.coroutines.launch
 import multipazidentityreader.composeapp.generated.resources.Res
 import multipazidentityreader.composeapp.generated.resources.trusted_issuers_screen_title
 import org.jetbrains.compose.resources.stringResource
+import org.multipaz.compose.items.FloatingItemCenteredText
 import org.multipaz.compose.pickers.FilePicker
 import org.multipaz.compose.pickers.rememberFilePicker
-import org.multipaz.compose.trustmanagement.TrustManagerList
+import org.multipaz.compose.trustmanagement.TrustEntryList
 import org.multipaz.compose.trustmanagement.TrustManagerModel
 import org.multipaz.crypto.X509Cert
 import org.multipaz.mdoc.vical.SignedVical
-import org.multipaz.trustmanagement.TrustEntry
 import org.multipaz.trustmanagement.TrustEntryAlreadyExistsException
 import org.multipaz.trustmanagement.TrustMetadata
 
@@ -231,7 +231,7 @@ fun TrustedIssuersScreen(
                 modifier = Modifier
                     .verticalScroll(scrollState)
                     .fillMaxSize()
-                    .padding(16.dp),
+                    .padding(8.dp),
             ) {
                 Text(
                     modifier = Modifier.padding(vertical = 16.dp),
@@ -241,17 +241,13 @@ distributed in lists from a trusted provider, called a VICAL (Verified Issuer Ce
                     """.trimIndent().replace("\n", " ").trim(),
                 )
 
-                TrustManagerList(
+                TrustEntryList(
                     trustManagerModel = builtInTrustManagerModel,
                     title = "Built-in",
                     imageLoader = imageLoader,
                     noItems = {
-                        Text(
+                        FloatingItemCenteredText(
                             text = "No built-in trusted issuers",
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.secondary,
-                            fontStyle = FontStyle.Italic,
-                            textAlign = TextAlign.Center
                         )
                     },
                     onTrustEntryClicked = { info ->
@@ -259,17 +255,13 @@ distributed in lists from a trusted provider, called a VICAL (Verified Issuer Ce
                     }
                 )
 
-                TrustManagerList(
+                TrustEntryList(
                     trustManagerModel = userTrustManagerModel,
                     title = "Manually imported",
                     imageLoader = imageLoader,
                     noItems = {
-                        Text(
+                        FloatingItemCenteredText(
                             text = "IACA certificates and VICALs manually imported will appear in this list",
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.secondary,
-                            fontStyle = FontStyle.Italic,
-                            textAlign = TextAlign.Center
                         )
                     },
                     onTrustEntryClicked = { info ->

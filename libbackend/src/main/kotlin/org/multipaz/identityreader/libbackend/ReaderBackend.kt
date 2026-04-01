@@ -321,6 +321,7 @@ open class ReaderBackend(
                 ),
                 readerKey = key,
                 subject = X500Name.fromName("CN=Multipaz Identity Reader Single-Use Key"),
+                dnsName = null,
                 serial = ASN1Integer.fromRandom(numBits = 128, random = random),
                 validFrom = validFrom,
                 validUntil = validUntil,
